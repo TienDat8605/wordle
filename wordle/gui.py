@@ -8,7 +8,7 @@ from typing import List, Tuple
 
 from .feedback import Mark
 from .game import WordleGame
-from .solver import SOLVERS, SolverResult, get_solver
+from .solver_optimized import OPTIMIZED_SOLVERS, SolverResult
 from .words import WORD_LIST
 
 
@@ -67,7 +67,7 @@ class WordleGUI:
         solver_frame.grid(row=2, column=0, sticky="ew")
 
         tk.Label(solver_frame, text="Solver:").grid(row=0, column=0)
-        solver_names = list(SOLVERS.keys())
+        solver_names = list(OPTIMIZED_SOLVERS.keys())
         solver_menu = tk.OptionMenu(solver_frame, self.solver_var, *solver_names)
         solver_menu.grid(row=0, column=1)
 
@@ -125,7 +125,7 @@ class WordleGUI:
     def run_solver(self) -> None:
         if self.animating:
             return
-        solver = get_solver(self.solver_var.get())
+        solver = OPTIMIZED_SOLVERS[self.solver_var.get()]
         simulation = WordleGame(answer=self.game.answer, word_list=WORD_LIST)
         result = solver.solve(simulation.answer, simulation.word_list)
         if not result.success:

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Dict, Iterable, List
 
-from .solver import SOLVERS, SolverResult
+from .solver_optimized import OPTIMIZED_SOLVERS, SolverResult
 from .words import WORD_LIST
 
 
@@ -28,13 +28,15 @@ class BenchmarkStats:
 
 
 def _benchmark_solver(solver_name: str, answers: Iterable[str]) -> BenchmarkStats:
-    solver = SOLVERS[solver_name]
+    solver = OPTIMIZED_SOLVERS[solver_name]
     elapsed_times: List[float] = []
     peak_memories: List[int] = []
     successes = 0
     nodes_expanded: List[int] = []
 
-    for answer in answers:
+    answers_list = list(answers)
+    for idx, answer in enumerate(answers_list, 1):
+        print(f"  {solver_name.upper()}: {idx}/{len(answers_list)} - {answer}", end="\r", flush=True)
         tracemalloc.start()
         start = time.perf_counter()
         result: SolverResult = solver.solve(answer, WORD_LIST)
@@ -48,6 +50,7 @@ def _benchmark_solver(solver_name: str, answers: Iterable[str]) -> BenchmarkStat
         if result.success:
             successes += 1
 
+    print(" " * 80, end="\r")  # Clear progress line
     runs = len(elapsed_times)
     success_rate = successes / runs if runs else 0.0
     avg_time = statistics.fmean(elapsed_times) if runs else 0.0
@@ -68,18 +71,19 @@ def _benchmark_solver(solver_name: str, answers: Iterable[str]) -> BenchmarkStat
     )
 
 
-def run_benchmarks(samples: int = 5, seed: int = 7) -> Dict[str, BenchmarkStats]:
+def run_benchmarks(samples: int = 3, seed: int = 7) -> Dict[str, BenchmarkStats]:
     """Run solvers on a subset of answers and return aggregated stats."""
 
     rng = Random(seed)
     answers = [rng.choice(WORD_LIST) for _ in range(samples)]
+    print(f"Benchmarking on {samples} random words: {', '.join(answers)}\n")
     stats: Dict[str, BenchmarkStats] = {}
-    for solver_name in SOLVERS:
+    for solver_name in OPTIMIZED_SOLVERS:
         stats[solver_name] = _benchmark_solver(solver_name, answers)
     return stats
 
 
-def print_benchmarks(samples: int = 5, seed: int = 7) -> None:
+def print_benchmarks(samples: int = 3, seed: int = 7) -> None:
     """Execute benchmarks and print a summary table."""
 
     stats = run_benchmarks(samples=samples, seed=seed)
@@ -105,7 +109,3 @@ def print_benchmarks(samples: int = 5, seed: int = 7) -> None:
             f"{stat.avg_nodes_expanded:.1f}",
         )
         print(" | ".join(row))
-
-
-if __name__ == "__main__":
-    print_benchmarks()

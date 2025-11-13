@@ -1,0 +1,336 @@
+"""Optimized search-based solvers with performance enhancements."""
+
+from __future__ import annotations
+
+import heapq
+from collections import deque
+from dataclasses import dataclass
+from typing import Callable, List, Sequence, Set, Tuple
+
+from .feedback import Feedback, Mark
+from .feedback_table import FeedbackTable
+from .knowledge import WordleKnowledge
+
+
+@dataclass
+class SolverResult:
+    """Outcome summary for a solver run."""
+
+    success: bool
+    history: Tuple[Tuple[str, Feedback], ...]
+    expanded_nodes: int
+    generated_nodes: int
+    frontier_max: int
+
+    def to_lines(self) -> List[str]:
+        """Render the result as printable lines for reporting."""
+
+        lines = [
+            f"Solved: {'yes' if self.success else 'no'}",
+            f"Guesses: {len(self.history)}",
+            f"Nodes expanded: {self.expanded_nodes}",
+            f"Nodes generated: {self.generated_nodes}",
+            f"Max frontier size: {self.frontier_max}",
+        ]
+        for guess, feedback in self.history:
+            marks = ''.join(mark.to_symbol() for mark in feedback)
+            lines.append(f"  {guess.upper()} -> {marks}")
+        return lines
+
+
+@dataclass(frozen=True)
+class CompactState:
+    """Compact, hashable state representation using history signature."""
+
+    history: Tuple[Tuple[str, Tuple[Mark, ...]], ...]
+    remaining_count: int
+
+    @classmethod
+    def from_history(cls, history: Tuple[Tuple[str, Feedback], ...], remaining: int) -> CompactState:
+        """Create a compact state from full history."""
+        compact_history = tuple(
+            (guess, tuple(feedback)) for guess, feedback in history
+        )
+        return cls(history=compact_history, remaining_count=remaining)
+
+
+class OptimizedGraphSearchSolver:
+    """Base class for optimized graph search with feedback caching."""
+
+    name = "optimized-graph-search"
+    
+    # Class-level shared feedback table (built once, used by all solver instances)
+    _shared_feedback_table: FeedbackTable | None = None
+    _shared_word_list: List[str] = []
+
+    def __init__(self, word_length: int = 5, max_branching: int = 50) -> None:
+        """Initialize solver with branching limit.
+        
+        Args:
+            word_length: Length of words in the puzzle.
+            max_branching: Maximum number of guesses to consider per state.
+        """
+        self.word_length = word_length
+        self.max_branching = max_branching
+
+    def solve(
+        self, answer: str, word_pool: Sequence[str], max_attempts: int = 6
+    ) -> SolverResult:
+        """Run the specific frontier strategy against an answer.
+
+        Args:
+            answer: The hidden solution word.
+            word_pool: Available guess candidates.
+            max_attempts: Maximum depth allowed by the puzzle.
+        """
+        # Build feedback table once per word pool (shared across all solver instances)
+        if (
+            OptimizedGraphSearchSolver._shared_feedback_table is None
+            or OptimizedGraphSearchSolver._shared_word_list != list(word_pool)
+        ):
+            OptimizedGraphSearchSolver._shared_word_list = list(word_pool)
+            OptimizedGraphSearchSolver._shared_feedback_table = FeedbackTable(
+                OptimizedGraphSearchSolver._shared_word_list
+            )
+
+        word_list = OptimizedGraphSearchSolver._shared_word_list
+        feedback_table = OptimizedGraphSearchSolver._shared_feedback_table
+
+        # Convert to indices for faster operations
+        word_to_idx = {w: i for i, w in enumerate(word_list)}
+        answer_idx = word_to_idx[answer.lower()]
+
+        # Root state: all words are possible
+        root_state = CompactState.from_history(tuple(), len(word_list))
+        frontier = self._create_frontier()
+        sequence = 0
+        self._push_frontier(frontier, root_state, tuple(), set(range(len(word_list))), 0, sequence)
+        sequence += 1
+
+        visited: Set[CompactState] = set()
+        expanded_nodes = 0
+        generated_nodes = 0
+        frontier_max = 1
+
+        while not self._frontier_empty(frontier):
+            state, history, possible_indices, depth = self._pop_frontier(frontier)
+            
+            if state in visited:
+                continue
+            visited.add(state)
+            expanded_nodes += 1
+
+            # Check if we found the answer
+            if history and word_to_idx[history[-1][0]] == answer_idx:
+                return SolverResult(True, history, expanded_nodes, generated_nodes, frontier_max)
+
+            if depth >= max_attempts:
+                continue
+
+            # Select promising guesses (limit branching)
+            candidate_indices = self._select_guesses(possible_indices, depth)
+
+            for guess_idx in candidate_indices:
+                guess = word_list[guess_idx]
+                feedback = feedback_table.get_feedback(guess, answer)
+                
+                # Fast filtering using precomputed feedback
+                new_possible = self._filter_candidates_fast(
+                    possible_indices, guess_idx, feedback, word_list, feedback_table
+                )
+
+                if not new_possible:
+                    continue
+
+                new_history = history + ((guess, feedback),)
+                new_state = CompactState.from_history(new_history, len(new_possible))
+                new_depth = depth + 1
+
+                generated_nodes += 1
+                priority = self._priority(new_state, new_depth, len(new_possible))
+                self._push_frontier(
+                    frontier, new_state, new_history, new_possible, new_depth, sequence
+                )
+                sequence += 1
+
+            frontier_max = max(frontier_max, self._frontier_size(frontier))
+
+        return SolverResult(False, tuple(), expanded_nodes, generated_nodes, frontier_max)
+
+    def _select_guesses(self, possible_indices: Set[int], depth: int) -> List[int]:
+        """Select subset of promising guesses to limit branching.
+        
+        Strategy: prioritize words from the remaining possible set.
+        """
+        candidates = list(possible_indices)
+        if len(candidates) <= self.max_branching:
+            return candidates
+        
+        # Use remaining words first (information-rich)
+        return candidates[:self.max_branching]
+
+    def _filter_candidates(
+        self, possible_indices: Set[int], guess_idx: int, feedback: Feedback
+    ) -> Set[int]:
+        """Filter candidates that match the observed feedback."""
+        word_list = OptimizedGraphSearchSolver._shared_word_list
+        feedback_table = OptimizedGraphSearchSolver._shared_feedback_table
+        assert feedback_table is not None
+        
+        result = set()
+        for idx in possible_indices:
+            target = word_list[idx]
+            guess = word_list[guess_idx]
+            if feedback_table.get_feedback(guess, target) == feedback:
+                result.add(idx)
+        return result
+    
+    @staticmethod
+    def _filter_candidates_fast(
+        possible_indices: Set[int],
+        guess_idx: int,
+        feedback: Feedback,
+        word_list: List[str],
+        feedback_table: FeedbackTable,
+    ) -> Set[int]:
+        """Static method for fast candidate filtering."""
+        result = set()
+        for idx in possible_indices:
+            target = word_list[idx]
+            guess = word_list[guess_idx]
+            if feedback_table.get_feedback(guess, target) == feedback:
+                result.add(idx)
+        return result
+
+    # --- Frontier management hooks -------------------------------------------------
+    def _create_frontier(self):
+        raise NotImplementedError
+
+    def _push_frontier(
+        self,
+        frontier,
+        state: CompactState,
+        history: Tuple[Tuple[str, Feedback], ...],
+        possible: Set[int],
+        depth: int,
+        sequence: int,
+    ) -> None:
+        raise NotImplementedError
+
+    def _pop_frontier(self, frontier) -> Tuple[CompactState, Tuple[Tuple[str, Feedback], ...], Set[int], int]:
+        raise NotImplementedError
+
+    def _frontier_empty(self, frontier) -> bool:
+        raise NotImplementedError
+
+    def _frontier_size(self, frontier) -> int:
+        raise NotImplementedError
+
+    def _priority(self, state: CompactState, depth: int, remaining: int) -> float:
+        return float(depth)
+
+
+class OptimizedBFS(OptimizedGraphSearchSolver):
+    """Optimized breadth-first search."""
+
+    name = "bfs-opt"
+
+    def _create_frontier(self):
+        return deque()
+
+    def _push_frontier(self, frontier, state, history, possible, depth, sequence):
+        frontier.append((state, history, possible, depth))
+
+    def _pop_frontier(self, frontier):
+        return frontier.popleft()
+
+    def _frontier_empty(self, frontier):
+        return not frontier
+
+    def _frontier_size(self, frontier):
+        return len(frontier)
+
+
+class OptimizedDFS(OptimizedGraphSearchSolver):
+    """Optimized depth-first search."""
+
+    name = "dfs-opt"
+
+    def _create_frontier(self):
+        return []
+
+    def _push_frontier(self, frontier, state, history, possible, depth, sequence):
+        frontier.append((state, history, possible, depth))
+
+    def _pop_frontier(self, frontier):
+        return frontier.pop()
+
+    def _frontier_empty(self, frontier):
+        return not frontier
+
+    def _frontier_size(self, frontier):
+        return len(frontier)
+
+
+class OptimizedUCS(OptimizedGraphSearchSolver):
+    """Optimized uniform cost search."""
+
+    name = "ucs-opt"
+
+    def _create_frontier(self):
+        return []
+
+    def _push_frontier(self, frontier, state, history, possible, depth, sequence):
+        priority = float(depth)
+        heapq.heappush(frontier, (priority, sequence, state, history, possible, depth))
+
+    def _pop_frontier(self, frontier):
+        _, _, state, history, possible, depth = heapq.heappop(frontier)
+        return state, history, possible, depth
+
+    def _frontier_empty(self, frontier):
+        return not frontier
+
+    def _frontier_size(self, frontier):
+        return len(frontier)
+
+
+class OptimizedAStar(OptimizedGraphSearchSolver):
+    """Optimized A* search with remaining candidates heuristic."""
+
+    name = "astar-opt"
+
+    def _create_frontier(self):
+        return []
+
+    def _push_frontier(self, frontier, state, history, possible, depth, sequence):
+        priority = self._priority(state, depth, len(possible))
+        heapq.heappush(frontier, (priority, sequence, state, history, possible, depth))
+
+    def _pop_frontier(self, frontier):
+        _, _, state, history, possible, depth = heapq.heappop(frontier)
+        return state, history, possible, depth
+
+    def _frontier_empty(self, frontier):
+        return not frontier
+
+    def _frontier_size(self, frontier):
+        return len(frontier)
+
+    def _priority(self, state: CompactState, depth: int, remaining: int) -> float:
+        """A* priority: cost + heuristic (remaining candidates as proxy for distance)."""
+        # Heuristic: fewer remaining words = closer to solution
+        heuristic = remaining / max(1, self.word_length)
+        return depth + heuristic
+
+
+# Registry of optimized solvers
+OPTIMIZED_SOLVERS = {
+    solver.name: solver
+    for solver in [
+        OptimizedBFS(max_branching=30),
+        OptimizedDFS(max_branching=30),
+        OptimizedUCS(max_branching=30),
+        OptimizedAStar(max_branching=30),
+    ]
+}

@@ -6,7 +6,6 @@ This project delivers a Python-based Wordle experience that combines a playable 
 ## Architecture
 - **Core game** (`wordle/game.py`): Maintains the canonical game state, validates guesses, and produces feedback compatible with the official rules.
 - **Knowledge model** (`wordle/knowledge.py`): Tracks positional and frequency constraints extracted from feedback, allowing solvers to prune infeasible candidates efficiently.
-- **Dictionary loader** (`wordle/words.py` + `valid_solutions.csv`): Loads the full NYT-style solution set supplied via CSV, falling back to a compact curated list if the dataset is absent.
 - **Solvers** (`wordle/solver.py`): Implements graph-search abstractions with interchangeable frontier strategies (queue, stack, priority queue, heuristic ordering). Search nodes include immutable history and cloned knowledge to prevent cross-branch contamination.
 - **GUI** (`wordle/gui.py`): Uses Tkinter widgets (labels, buttons, option menus) as documented in the [Tkinter Docs project](https://context7.com/rdbende/tkinter-docs) to render the board, capture user input, and animate solver output.
 - **Benchmarking** (`wordle/benchmark.py`): Executes each solver against sampled answers while recording wall-clock time, peak memory via `tracemalloc`, and search effort metrics.

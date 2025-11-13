@@ -26,7 +26,6 @@ Python implementation of Wordle featuring an interactive GUI, AI solvers (BFS, D
 	python -m wordle.benchmark
 	```
 - Animate a solver from the GUI by selecting it in the dropdown and clicking **Run Solver**.
-- The canonical solution list lives in `valid_solutions.csv` and is loaded automatically at runtime. Update this file to swap dictionaries without code changes.
 
 ## Solvers
 - **BFS** – breadth-first exploration of consistent candidate spaces.
@@ -52,6 +51,5 @@ Re-run `python -m wordle.benchmark` to regenerate metrics or adjust sampling.
 - `wordle/solver.py` – search implementations and registry.
 - `wordle/benchmark.py` – benchmarking utilities and CLI entry point.
 - `wordle/words.py` – curated five-letter word list.
-- `valid_solutions.csv` – primary solution/guess dictionary used by the game and solvers.
 
 See `REPORT.md` for implementation notes and solver analysis.
