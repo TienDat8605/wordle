@@ -17,14 +17,17 @@ Requirements: Python 3.8+ (standard library only, no external dependencies)
 
 ```bash
 # Clone or download the repository
-cd Wordle
+git clone https://github.com/TienDat8605/wordle.git
+cd wordle
 
-# Run the game
+# Run the game (cache will be built automatically on first run)
 python -m wordle
 
 # Or use the launcher script
 python run_game.py
 ```
+
+**Note**: First run will take 2-5 seconds to build the feedback cache (5.3M precomputed pairs). Subsequent runs will be instant (<100ms).
 
 ### Option 2: Run as Executable
 Build a standalone executable with the precomputed cache included:
