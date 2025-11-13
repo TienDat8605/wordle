@@ -5,7 +5,7 @@ from __future__ import annotations
 import heapq
 from collections import deque
 from dataclasses import dataclass
-from typing import Callable, List, Sequence, Set, Tuple
+from typing import Callable, List, Optional, Sequence, Set, Tuple
 
 from .feedback import Feedback, Mark
 from .feedback_table import FeedbackTable
@@ -21,6 +21,15 @@ class SolverResult:
     expanded_nodes: int
     generated_nodes: int
     frontier_max: int
+    explored_words: Optional[List[str]] = None  # Words explored during search
+    final_path: Optional[List[str]] = None  # Final path taken (guesses only)
+
+    def __post_init__(self):
+        """Initialize derived fields if not provided."""
+        if self.final_path is None:
+            self.final_path = [guess for guess, _ in self.history]
+        if self.explored_words is None:
+            self.explored_words = []
 
     def to_lines(self) -> List[str]:
         """Render the result as printable lines for reporting."""
@@ -32,6 +41,10 @@ class SolverResult:
             f"Nodes generated: {self.generated_nodes}",
             f"Max frontier size: {self.frontier_max}",
         ]
+        if self.explored_words:
+            lines.append(f"Words explored: {len(self.explored_words)}")
+        if self.final_path:
+            lines.append(f"Final path: {' -> '.join(w.upper() for w in self.final_path)}")
         for guess, feedback in self.history:
             marks = ''.join(mark.to_symbol() for mark in feedback)
             lines.append(f"  {guess.upper()} -> {marks}")
@@ -111,6 +124,7 @@ class OptimizedGraphSearchSolver:
         expanded_nodes = 0
         generated_nodes = 0
         frontier_max = 1
+        explored_words: List[str] = []  # Track all words explored
 
         while not self._frontier_empty(frontier):
             state, history, possible_indices, depth = self._pop_frontier(frontier)
@@ -122,7 +136,11 @@ class OptimizedGraphSearchSolver:
 
             # Check if we found the answer
             if history and word_to_idx[history[-1][0]] == answer_idx:
-                return SolverResult(True, history, expanded_nodes, generated_nodes, frontier_max)
+                final_path = [guess for guess, _ in history]
+                return SolverResult(
+                    True, history, expanded_nodes, generated_nodes, 
+                    frontier_max, explored_words, final_path
+                )
 
             if depth >= max_attempts:
                 continue
@@ -132,6 +150,11 @@ class OptimizedGraphSearchSolver:
 
             for guess_idx in candidate_indices:
                 guess = word_list[guess_idx]
+                
+                # Track explored words
+                if guess not in explored_words:
+                    explored_words.append(guess)
+                
                 feedback = feedback_table.get_feedback(guess, answer)
                 
                 # Fast filtering using precomputed feedback
@@ -155,7 +178,10 @@ class OptimizedGraphSearchSolver:
 
             frontier_max = max(frontier_max, self._frontier_size(frontier))
 
-        return SolverResult(False, tuple(), expanded_nodes, generated_nodes, frontier_max)
+        return SolverResult(
+            False, tuple(), expanded_nodes, generated_nodes, 
+            frontier_max, explored_words, []
+        )
 
     def _select_guesses(self, possible_indices: Set[int], depth: int) -> List[int]:
         """Select subset of promising guesses to limit branching.

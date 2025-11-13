@@ -279,6 +279,7 @@ class WordleGUI:
                 # Show completed guess with feedback
                 guess, feedback = history[row]
                 for col, entry in enumerate(row_entries):
+                    entry.config(state="normal")  # Enable to allow modification
                     entry.delete(0, tk.END)
                     entry.insert(0, guess[col].upper())
                     entry.config(
@@ -291,12 +292,12 @@ class WordleGUI:
                     entry.unbind("<BackSpace>")
                     entry.unbind("<Return>")
             else:
-                # Clear and configure row
+                # Clear and configure row (for all rows >= len(history))
                 for entry in row_entries:
+                    entry.config(state="normal")  # Enable to allow modification
                     entry.delete(0, tk.END)
                     entry.config(
                         bg="white",
-                        state="normal",
                         disabledbackground="white",
                     )
                     
@@ -322,7 +323,7 @@ class WordleGUI:
         
         # Update status
         if self.game.state.is_won:
-            self.status_var.set("Solved! 🎉")
+            self.status_var.set("Solved!")
         elif self.game.state.is_lost:
             self.status_var.set(f"Out of guesses. Answer was {self.game.answer.upper()}.")
         else:
@@ -361,6 +362,15 @@ class WordleGUI:
             return
         self.game.reset()
         self._render_board()
+        
+        # Clear benchmark results
+        self.results_text.config(state="normal")
+        self.results_text.delete("1.0", tk.END)
+        self.results_text.insert("1.0", "Click 'Benchmark' to run solver performance tests...")
+        self.results_text.config(state="disabled")
+        
+        # Reset status message
+        self.status_var.set(f"Attempts left: {self.game.state.remaining_attempts}")
 
     def run_solver(self) -> None:
         """Run the selected solver with animation."""
@@ -381,6 +391,47 @@ class WordleGUI:
         if not result.success:
             messagebox.showinfo("Solver", "Solver failed to find the answer within the attempt limit.")
             return
+        
+        # Display solver exploration info
+        self.results_text.config(state="normal")
+        self.results_text.delete("1.0", tk.END)
+        
+        result_lines = [
+            f"Solver: {display_name}\n",
+            f"Target word: {simulation.answer.upper()}\n",
+            "=" * 80 + "\n\n",
+            f"• Solved in {len(result.history)} guesses\n",
+            f"• Nodes expanded: {result.expanded_nodes}\n",
+            f"• Nodes generated: {result.generated_nodes}\n",
+            f"• Max frontier size: {result.frontier_max}\n",
+        ]
+        
+        if result.explored_words:
+            result_lines.append(f"• Words explored: {len(result.explored_words)}\n\n")
+            
+            # Show first 40 explored words
+            max_display = 40
+            if len(result.explored_words) <= max_display:
+                explored_str = ", ".join(w.upper() for w in result.explored_words)
+            else:
+                displayed = result.explored_words[:max_display]
+                explored_str = ", ".join(w.upper() for w in displayed)
+                explored_str += f", ... and {len(result.explored_words) - max_display} more"
+            
+            result_lines.append(f"Explored: {explored_str}\n\n")
+        
+        if result.final_path:
+            path_str = " → ".join(w.upper() for w in result.final_path)
+            result_lines.append(f"Solution path: {path_str}\n\n")
+        
+        result_lines.append("Guess details:\n")
+        result_lines.append("-" * 80 + "\n")
+        for i, (guess, feedback) in enumerate(result.history, 1):
+            marks = ''.join(mark.to_symbol() for mark in feedback)
+            result_lines.append(f"{i}. {guess.upper()} → {marks}\n")
+        
+        self.results_text.insert("1.0", "".join(result_lines))
+        self.results_text.config(state="disabled")
         
         self.pending_animation = [(guess, list(feedback)) for guess, feedback in result.history]
         self.game.reset(answer=simulation.answer)
