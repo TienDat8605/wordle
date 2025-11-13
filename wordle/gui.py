@@ -26,8 +26,8 @@ class WordleGUI:
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("Wordle AI Studio")
-        self.root.geometry("800x900")  # Initial size
-        self.root.minsize(700, 800)  # Minimum size
+        self.root.geometry("720x720")  # Initial size
+        self.root.minsize(500, 500)  # Minimum size
         self.root.resizable(True, True)
 
         self.game = WordleGame()
