@@ -13,6 +13,10 @@ from .solver_optimized import OPTIMIZED_SOLVERS, SolverResult
 from .words import WORD_LIST
 
 
+# Default solvers for benchmarking (basic 4 algorithms)
+DEFAULT_BENCHMARK_SOLVERS = ['bfs-opt', 'dfs-opt', 'ucs-constant', 'astar-constant-log2']
+
+
 @dataclass
 class BenchmarkStats:
     """Aggregate statistics for a solver across multiple runs."""
@@ -71,14 +75,27 @@ def _benchmark_solver(solver_name: str, answers: Iterable[str]) -> BenchmarkStat
     )
 
 
-def run_benchmarks(samples: int = 3, seed: int = 7) -> Dict[str, BenchmarkStats]:
-    """Run solvers on a subset of answers and return aggregated stats."""
+def run_benchmarks(samples: int = 3, seed: int = 7, solvers: List[str] | None = None) -> Dict[str, BenchmarkStats]:
+    """Run solvers on a subset of answers and return aggregated stats.
+    
+    Args:
+        samples: Number of random words to test.
+        seed: Random seed for reproducibility.
+        solvers: List of solver names to benchmark. If None, uses default 4 basic solvers.
+    """
 
     rng = Random(seed)
     answers = [rng.choice(WORD_LIST) for _ in range(samples)]
     print(f"Benchmarking on {samples} random words: {', '.join(answers)}\n")
+    
+    # Use provided solvers or default to basic 4
+    solver_list = solvers if solvers is not None else DEFAULT_BENCHMARK_SOLVERS
+    
     stats: Dict[str, BenchmarkStats] = {}
-    for solver_name in OPTIMIZED_SOLVERS:
+    for solver_name in solver_list:
+        if solver_name not in OPTIMIZED_SOLVERS:
+            print(f"Warning: Solver '{solver_name}' not found, skipping...")
+            continue
         stats[solver_name] = _benchmark_solver(solver_name, answers)
     return stats
 

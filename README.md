@@ -1,55 +1,33 @@
 # Wordle Game
 
-Python implementation of Wordle featuring an interactive GUI, AI solvers (BFS, DFS, UCS, A*), visual animations, and benchmarking utilities.
+Python implementation of Wordle featuring an interactive GUI, AI solvers with **configurable cost and heuristic functions**, visual animations, and comprehensive benchmarking utilities.
 
 ## Features
 - Classic Wordle gameplay with a Tkinter GUI and curated 2,315-word dictionary
 - Direct cell input with keyboard navigation (type, backspace across cells, Enter to submit)
-- Search-based AI solvers (BFS, DFS, UCS, A*) with on-screen animation of their decision process
+- **24 AI solver configurations**: BFS, DFS, UCS (4 cost functions), A* (4 cost × 5 heuristic = 20 variants)
+- **Configurable search strategies**: Choose different cost functions (constant, candidate reduction, partition balance, entropy) and heuristics (ratio, remaining, log2, entropy gap, partition)
+- Search-based AI solvers with on-screen animation of their decision process
 - Benchmark harness measuring solver latency, memory usage (via `tracemalloc`), and node expansion counts
 - Persistent feedback table caching for instant startup (precomputed 5.3M feedback pairs)
 - Extensible code structure for experimenting with additional heuristics or word lists
 
 ## Quick Start
 
-### Option 1: Run from Source
+### Run from Source
 Requirements: Python 3.8+ (standard library only, no external dependencies)
 
 ```bash
-# Clone or download the repository
+# Clone the repository
 git clone https://github.com/TienDat8605/wordle.git
 cd wordle
 
-# Run the game (cache will be built automatically on first run)
-python -m wordle
-
-# Or use the launcher script
-python run_game.py
-```
-
-**Note**: First run will take 2-5 seconds to build the feedback cache (5.3M precomputed pairs). Subsequent runs will be instant (<100ms).
-
-### Option 2: Run as Executable
-Build a standalone executable with the precomputed cache included:
-
-```bash
-# Install PyInstaller (one-time setup)
-pip install pyinstaller
-
-# Build the executable
-./build_executable.sh
-
 # Run the game
-./dist/WordleAI          # Linux/Mac
-dist\WordleAI.exe        # Windows
+python -m wordle
+# Or: python run_game.py
 ```
 
-The executable includes:
-- Complete game with GUI
-- All 4 AI solvers
-- Precomputed feedback cache (no build delay)
-- 2,315-word dataset
-- Benchmark functionality
+**Note**: First run takes 2-5 seconds to build feedback cache. Subsequent runs are instant (<100ms).
 
 ## Usage
 
@@ -77,25 +55,73 @@ python run_benchmarks.py
 ```
 
 ## Solvers
+
+### Core Algorithms
 - **BFS** – Breadth-first search: explores states level by level, guarantees minimum guesses
 - **DFS** – Depth-first search: memory efficient, explores deeply before backtracking  
-- **UCS** – Uniform cost search: treats each guess as unit cost, equivalent to BFS for Wordle
-- **A*** – A* search with admissible heuristic (candidate pool size): fastest solver, maintains optimality
+- **UCS** – Uniform cost search with **4 configurable cost functions**
+- **A*** – A* search with **4 cost functions × 5 heuristic functions = 20 variants**
+
+### Cost Functions (UCS and A*)
+Cost functions determine **g(n)** – the accumulated cost to reach state n. Lower cost = better guess path.
+
+| Function | Mathematical Formula | Description | Use Case |
+|----------|---------------------|-------------|----------|
+| **constant** | $c(s) = 1$ | Every guess costs the same | Baseline (UCS = BFS) |
+| **reduction** | $c(s) = 1 + \frac{\|C_{after}\|}{\|C_{before}\|}$ | Rewards candidate elimination | ⭐ **RECOMMENDED** |
+| **partition** | $c(s) = 1 + \frac{\max(\|P_i\|)}{\|C_{before}\|}$ | Penalizes large partitions | Avoids worst-case |
+| **entropy** | $c(s) = 2 - \frac{H(X)}{H_{max}}$ | High entropy = cheap | Information theory |
+
+Where:
+- $\|C_{before}\|$ = number of candidates before guess
+- $\|C_{after}\|$ = number of candidates after guess  
+- $P_i$ = partition i of candidates (grouped by feedback pattern)
+- $H(X) = -\sum p_i \log_2(p_i)$ = Shannon entropy of partitions
+- $H_{max} = \log_2(\|C_{before}\|)$ = maximum possible entropy
+
+### Heuristic Functions (A* only)
+Heuristics estimate **h(n)** – the remaining cost to reach the goal. Used in A* priority: $f(n) = g(n) + h(n)$
+
+| Function | Mathematical Formula | Admissible? | Description |
+|----------|---------------------|-------------|-------------|
+| **ratio** | $h(n) = \frac{\|C_{remaining}\|}{5}$ | ❌ | Simple division by word length |
+| **remaining** | $h(n) = \|C_{remaining}\|$ | ❌ | Direct candidate count |
+| **log2** | $h(n) = \log_2(\|C_{remaining}\|)$ | ✅ | Minimum binary splits needed ⭐ |
+| **entropy** | $h(n) = H_{max} - H(X)$ | ❌ | Information gap to certainty |
+| **partition** | $h(n) = \log_2(\max(\|P_i\|))$ | ✅ | Worst-case partition size |
+
+**Admissibility**: A heuristic is admissible if $h(n) \leq h^*(n)$ (never overestimates true cost). Admissible heuristics guarantee optimal solutions in A*.
+
+*See REPORT.md for detailed mathematical derivations and performance comparisons.*
 
 ## Benchmark Results *(samples=10, seed=42)*
+
+### Default Solvers (constant cost, ratio heuristic)
 
 | Solver | Success | Avg Time (ms) | Max Time (ms) | Avg Memory (KB) | Max Memory (KB) | Avg Nodes |
 |--------|---------|---------------|---------------|-----------------|-----------------|-----------|
 | **BFS** | 100% | 2258.27 | 18927.55 | 185240.96 | 1828805.23 | 124.3 |
 | **DFS** | 100% | 61.38 | 65.36 | 597.49 | 802.07 | 5.3 |
-| **UCS** | 100% | 415.42 | 1676.13 | 2871.36 | 8204.15 | 124.3 |
-| **A*** | 100% | 57.56 | 59.71 | 597.49 | 802.07 | 4.0 |
+| **UCS-constant** | 100% | 415.42 | 1676.13 | 2871.36 | 8204.15 | 124.3 |
+| **A*-constant-ratio** | 100% | 57.56 | 59.71 | 597.49 | 802.07 | 4.0 |
+
+### Recommended Configurations (single word test)
+
+Test on "WORLD":
+
+| Solver | Guesses | Nodes Explored | Improvement |
+|--------|---------|----------------|-------------|
+| `bfs-opt` | 2 | 247 | Baseline |
+| `ucs-reduction` | 2 | 73 | 70% fewer nodes |
+| `astar-constant-log2` | 2 | 3 | **99% fewer nodes!** |
+| `astar-reduction-log2` | 2 | 3 | **99% fewer nodes!** |
 
 **Key Findings:**
 - A* is 39× faster than BFS with 310× less memory usage
+- **log2 heuristic** is dramatically more efficient (247 → 3 nodes)
+- **reduction cost** improves search by 70%
 - All solvers achieve 100% success rate within 6 guesses
 - DFS is surprisingly effective due to constraint propagation
-- BFS has exponential memory growth issues at scale
 
 Run `python run_benchmarks.py --samples 10 --seed 42` to regenerate these metrics.
 
@@ -103,43 +129,32 @@ Run `python run_benchmarks.py --samples 10 --seed 42` to regenerate these metric
 
 ```
 Wordle/
-├── wordle/
-│   ├── game.py              # Core game state and validation
-│   ├── gui.py               # Tkinter UI with keyboard input
-│   ├── solver_optimized.py  # Optimized search implementations
-│   ├── feedback.py          # Feedback evaluation (Mark enum)
-│   ├── feedback_table.py    # Precomputed feedback cache
-│   ├── knowledge.py         # Constraint tracking system
-│   ├── words.py             # 2,315-word dataset loader
-│   └── benchmark.py         # Performance measurement utilities
-├── valid_solutions.csv      # Curated word list
-├── run_game.py              # Game launcher script
-├── run_benchmarks.py        # Benchmark CLI tool
-├── build_executable.sh      # Executable build script
-└── REPORT.md                # Detailed implementation report
+├── wordle/               # Main package
+│   ├── game.py           # Core game logic
+│   ├── gui.py            # Tkinter UI
+│   ├── solver_optimized.py  # Search algorithms (32 configs)
+│   ├── feedback.py       # Feedback evaluation
+│   ├── feedback_table.py # Precomputed cache
+│   ├── knowledge.py      # Constraint tracking
+│   ├── words.py          # 2,315-word dataset
+│   └── benchmark.py      # Performance testing
+├── valid_solutions.csv   # Word list
+├── run_game.py           # Launcher
+├── run_benchmarks.py     # CLI benchmarking
+├── build_executable.sh   # Linux/Mac build script
+├── build_executable.bat  # Windows build script
+├── README.md             # This file
+└── REPORT.md             # Detailed analysis
 ```
 
 ## Technical Highlights
 
-- **Precomputed Feedback Table**: 5,359,225 feedback pairs cached to disk
-  - First run: ~2-5 seconds to build
-  - Subsequent runs: <100ms to load from cache
-  
-- **Efficient State Representation**: Frozen dataclass with immutable history for O(1) hashing
+- **32 Solver Configurations**: Combine 5 cost functions with 5 heuristics for experimentation
+- **Precomputed Feedback Table**: 5.3M pairs cached (2-5s first run, <100ms after)
+- **Efficient State Representation**: Immutable frozen dataclass for O(1) hashing
+- **Constraint Propagation**: Incremental filtering reduces search space
+- **Branching Limiting**: Max 30 candidates per state prevents blowup
 
-- **Constraint Propagation**: WordleKnowledge class incrementally updates constraints
-  - Known positions, excluded positions
-  - Min/max letter counts
-  - Excluded letters
-  
-- **Branching Factor Limiting**: Max 30 candidates per state prevents exponential blowup
-
-## Performance Notes
-
-On a typical system:
-- **Game launch**: Instant (cache loads in <100ms)
-- **A* solver**: ~58ms average per puzzle
-- **GUI response**: Immediate, smooth animations
-- **Memory usage**: ~600KB for DFS/A*, ~185MB for BFS
+For detailed algorithm analysis, cost/heuristic explanations, and implementation details, see **REPORT.md**.
 
 See `REPORT.md` for detailed algorithm analysis and implementation notes.

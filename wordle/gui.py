@@ -8,7 +8,7 @@ from typing import List, Tuple
 
 from .feedback import Mark
 from .game import WordleGame
-from .solver_optimized import OPTIMIZED_SOLVERS
+from .solver_optimized import OPTIMIZED_SOLVERS, COST_FUNCTIONS, HEURISTIC_FUNCTIONS
 from .words import WORD_LIST
 
 
@@ -17,23 +17,25 @@ class WordleGUI:
 
     # Friendly display names for solvers
     SOLVER_DISPLAY_NAMES = {
-        "bfs-opt": "BFS",
-        "dfs-opt": "DFS",
-        "ucs-opt": "UCS",
-        "astar-opt": "A*",
+        "BFS": "bfs-opt",
+        "DFS": "dfs-opt",
+        "UCS": "ucs",
+        "A*": "astar",
     }
 
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("Wordle AI Studio")
-        self.root.geometry("720x720")  # Initial size
-        self.root.minsize(500, 500)  # Minimum size
+        self.root.geometry("900x950")  # Initial size (larger for more controls)
+        self.root.minsize(800, 900)  # Minimum size
         self.root.resizable(True, True)
 
         self.game = WordleGame()
         self.board_entries: List[List[tk.Entry]] = []
         self.status_var = tk.StringVar(value="Welcome to Wordle AI Studio!")
         self.solver_var = tk.StringVar(value="BFS")
+        self.cost_var = tk.StringVar(value="constant")
+        self.heuristic_var = tk.StringVar(value="log2")
         self.animating = False
         self.pending_animation: list[Tuple[str, List[Mark]]] = []
         self.current_row = 0
@@ -41,6 +43,7 @@ class WordleGUI:
 
         self._build_widgets()
         self._render_board()
+        self._update_controls_visibility()
 
     def _build_widgets(self) -> None:
         # Configure grid weights for resizing
@@ -102,9 +105,9 @@ class WordleGUI:
         # ==== Controls ====
         controls_frame = tk.Frame(self.root, bg="#f8f9fa")
         controls_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=10)
-        controls_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        controls_frame.grid_columnconfigure((0, 1, 2, 3, 4, 5), weight=1)
 
-        # Solver dropdown
+        # Row 0: Solver selection
         tk.Label(
             controls_frame,
             text="Solver:",
@@ -112,13 +115,48 @@ class WordleGUI:
             bg="#f8f9fa",
         ).grid(row=0, column=0, padx=5, sticky="e")
 
-        solver_menu = tk.OptionMenu(
+        self.solver_menu = tk.OptionMenu(
             controls_frame,
             self.solver_var,
-            *self.SOLVER_DISPLAY_NAMES.values(),
+            *self.SOLVER_DISPLAY_NAMES.keys(),
+            command=self._update_controls_visibility,
         )
-        solver_menu.config(font=("Helvetica", 11), width=8)
-        solver_menu.grid(row=0, column=1, padx=5, sticky="w")
+        self.solver_menu.config(font=("Helvetica", 11), width=8)
+        self.solver_menu.grid(row=0, column=1, padx=5, sticky="w")
+
+        # Row 1: Cost function (for UCS and A*)
+        self.cost_label = tk.Label(
+            controls_frame,
+            text="Cost Fn:",
+            font=("Helvetica", 12),
+            bg="#f8f9fa",
+        )
+        self.cost_label.grid(row=1, column=0, padx=5, sticky="e")
+
+        self.cost_menu = tk.OptionMenu(
+            controls_frame,
+            self.cost_var,
+            *COST_FUNCTIONS.keys(),
+        )
+        self.cost_menu.config(font=("Helvetica", 10), width=12)
+        self.cost_menu.grid(row=1, column=1, padx=5, sticky="w")
+
+        # Row 2: Heuristic function (for A* only)
+        self.heuristic_label = tk.Label(
+            controls_frame,
+            text="Heuristic:",
+            font=("Helvetica", 12),
+            bg="#f8f9fa",
+        )
+        self.heuristic_label.grid(row=2, column=0, padx=5, sticky="e")
+
+        self.heuristic_menu = tk.OptionMenu(
+            controls_frame,
+            self.heuristic_var,
+            *HEURISTIC_FUNCTIONS.keys(),
+        )
+        self.heuristic_menu.config(font=("Helvetica", 10), width=12)
+        self.heuristic_menu.grid(row=2, column=1, padx=5, sticky="w")
 
         # Run Solver button
         run_solver_btn = tk.Button(
@@ -132,7 +170,7 @@ class WordleGUI:
             pady=5,
             relief="raised",
         )
-        run_solver_btn.grid(row=0, column=2, padx=5)
+        run_solver_btn.grid(row=0, column=2, padx=5, rowspan=3)
 
         # New Game button
         new_game_btn = tk.Button(
@@ -146,7 +184,7 @@ class WordleGUI:
             pady=5,
             relief="raised",
         )
-        new_game_btn.grid(row=0, column=3, padx=5)
+        new_game_btn.grid(row=0, column=3, padx=5, rowspan=3)
 
         # Benchmark button
         benchmark_btn = tk.Button(
@@ -160,7 +198,7 @@ class WordleGUI:
             pady=5,
             relief="raised",
         )
-        benchmark_btn.grid(row=0, column=4, padx=5)
+        benchmark_btn.grid(row=0, column=4, padx=5, rowspan=3)
 
         # ==== Benchmark Results Area ====
         results_frame = tk.Frame(self.root, bg="#f8f9fa")
@@ -372,17 +410,54 @@ class WordleGUI:
         # Reset status message
         self.status_var.set(f"Attempts left: {self.game.state.remaining_attempts}")
 
+    def _update_controls_visibility(self, *args) -> None:
+        """Show/hide cost and heuristic controls based on solver selection."""
+        solver = self.solver_var.get()
+        
+        if solver == "UCS":
+            # Show cost, hide heuristic
+            self.cost_label.grid()
+            self.cost_menu.grid()
+            self.heuristic_label.grid_remove()
+            self.heuristic_menu.grid_remove()
+        elif solver == "A*":
+            # Show both cost and heuristic
+            self.cost_label.grid()
+            self.cost_menu.grid()
+            self.heuristic_label.grid()
+            self.heuristic_menu.grid()
+        else:
+            # Hide both (BFS, DFS)
+            self.cost_label.grid_remove()
+            self.cost_menu.grid_remove()
+            self.heuristic_label.grid_remove()
+            self.heuristic_menu.grid_remove()
+
     def run_solver(self) -> None:
         """Run the selected solver with animation."""
         if self.animating:
             return
         
-        # Map display name back to internal solver key
-        display_name = self.solver_var.get()
-        solver_key = next(
-            (k for k, v in self.SOLVER_DISPLAY_NAMES.items() if v == display_name),
-            "bfs-opt"
-        )
+        # Get solver type
+        solver_type = self.solver_var.get()
+        solver_base = self.SOLVER_DISPLAY_NAMES.get(solver_type, "bfs-opt")
+        
+        # Build solver key based on type and selected functions
+        if solver_base == "bfs-opt" or solver_base == "dfs-opt":
+            solver_key = solver_base
+        elif solver_base == "ucs":
+            cost_fn = self.cost_var.get()
+            solver_key = f"ucs-{cost_fn}"
+        elif solver_base == "astar":
+            cost_fn = self.cost_var.get()
+            heuristic_fn = self.heuristic_var.get()
+            solver_key = f"astar-{cost_fn}-{heuristic_fn}"
+        else:
+            solver_key = "bfs-opt"
+        
+        if solver_key not in OPTIMIZED_SOLVERS:
+            messagebox.showerror("Error", f"Solver '{solver_key}' not found!")
+            return
         
         solver = OPTIMIZED_SOLVERS[solver_key]
         simulation = WordleGame(answer=self.game.answer, word_list=WORD_LIST)
@@ -396,8 +471,15 @@ class WordleGUI:
         self.results_text.config(state="normal")
         self.results_text.delete("1.0", tk.END)
         
+        # Build solver description
+        solver_desc = solver_type
+        if solver_type == "UCS":
+            solver_desc += f" (cost={self.cost_var.get()})"
+        elif solver_type == "A*":
+            solver_desc += f" (cost={self.cost_var.get()}, h={self.heuristic_var.get()})"
+        
         result_lines = [
-            f"Solver: {display_name}\n",
+            f"Solver: {solver_desc}\n",
             f"Target word: {simulation.answer.upper()}\n",
             "=" * 80 + "\n\n",
             f"• Solved in {len(result.history)} guesses\n",
@@ -457,15 +539,15 @@ class WordleGUI:
         
         dialog = tk.Toplevel(self.root)
         dialog.title("Run Benchmark")
-        dialog.geometry("400x200")
+        dialog.geometry("500x450")
         dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.grab_set()
         
         # Center the dialog
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (200 // 2)
+        x = (dialog.winfo_screenwidth() // 2) - (250)
+        y = (dialog.winfo_screenheight() // 2) - (225)
         dialog.geometry(f"+{x}+{y}")
         
         # Samples input
@@ -484,14 +566,70 @@ class WordleGUI:
         seed_entry = tk.Entry(dialog, textvariable=seed_var, font=("Helvetica", 11), width=10)
         seed_entry.grid(row=1, column=1, padx=10, pady=10, sticky="w")
         
+        # Solver selection section
+        tk.Label(dialog, text="Select Solvers:", font=("Helvetica", 11, "bold")).grid(
+            row=2, column=0, columnspan=2, padx=20, pady=(15, 5), sticky="w"
+        )
+        
+        # Checkboxes for basic solvers
+        solver_vars = {}
+        solver_frame = tk.Frame(dialog)
+        solver_frame.grid(row=3, column=0, columnspan=2, padx=40, pady=5, sticky="w")
+        
+        # Basic solvers
+        basic_solvers = [
+            ('bfs-opt', 'BFS', True),
+            ('dfs-opt', 'DFS', True),
+        ]
+        
+        for i, (key, name, default) in enumerate(basic_solvers):
+            var = tk.BooleanVar(value=default)
+            solver_vars[key] = var
+            cb = tk.Checkbutton(solver_frame, text=name, variable=var, font=("Helvetica", 10))
+            cb.grid(row=i // 2, column=i % 2, sticky="w", padx=10, pady=2)
+        
+        # UCS with cost selection
+        tk.Label(solver_frame, text="UCS:", font=("Helvetica", 10)).grid(
+            row=1, column=0, sticky="w", padx=10, pady=2
+        )
+        ucs_var = tk.BooleanVar(value=True)
+        ucs_cb = tk.Checkbutton(solver_frame, variable=ucs_var, font=("Helvetica", 10))
+        ucs_cb.grid(row=1, column=0, sticky="w", padx=80, pady=2)
+        
+        ucs_cost_var = tk.StringVar(value="constant")
+        ucs_cost_menu = tk.OptionMenu(solver_frame, ucs_cost_var, "constant", "reduction", "partition", "entropy")
+        ucs_cost_menu.config(font=("Helvetica", 9), width=10)
+        ucs_cost_menu.grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        
+        # A* with cost and heuristic selection
+        tk.Label(solver_frame, text="A*:", font=("Helvetica", 10)).grid(
+            row=2, column=0, sticky="w", padx=10, pady=2
+        )
+        astar_var = tk.BooleanVar(value=True)
+        astar_cb = tk.Checkbutton(solver_frame, variable=astar_var, font=("Helvetica", 10))
+        astar_cb.grid(row=2, column=0, sticky="w", padx=80, pady=2)
+        
+        astar_cost_var = tk.StringVar(value="constant")
+        astar_cost_menu = tk.OptionMenu(solver_frame, astar_cost_var, "constant", "reduction", "partition", "entropy")
+        astar_cost_menu.config(font=("Helvetica", 9), width=10)
+        astar_cost_menu.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        
+        tk.Label(solver_frame, text="h:", font=("Helvetica", 9)).grid(
+            row=3, column=0, sticky="e", padx=85, pady=2
+        )
+        astar_h_var = tk.StringVar(value="log2")
+        astar_h_menu = tk.OptionMenu(solver_frame, astar_h_var, "ratio", "remaining", "log2", "entropy", "partition")
+        astar_h_menu.config(font=("Helvetica", 9), width=10)
+        astar_h_menu.grid(row=3, column=1, sticky="w", padx=5, pady=2)
+        
         # Status label
         status_var = tk.StringVar(value="")
         status_label = tk.Label(dialog, textvariable=status_var, font=("Helvetica", 10), fg="blue")
-        status_label.grid(row=2, column=0, columnspan=2, pady=5)
+        status_label.grid(row=4, column=0, columnspan=2, pady=5)
         
         # Buttons
         button_frame = tk.Frame(dialog)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=20)
+        button_frame.grid(row=5, column=0, columnspan=2, pady=20)
         
         def run_benchmark():
             try:
@@ -502,14 +640,33 @@ class WordleGUI:
                     messagebox.showerror("Invalid Input", "Samples must be between 1 and 50")
                     return
                 
+                # Build solver list based on selections
+                selected_solvers = []
+                
+                if solver_vars['bfs-opt'].get():
+                    selected_solvers.append('bfs-opt')
+                if solver_vars['dfs-opt'].get():
+                    selected_solvers.append('dfs-opt')
+                if ucs_var.get():
+                    cost = ucs_cost_var.get()
+                    selected_solvers.append(f'ucs-{cost}')
+                if astar_var.get():
+                    cost = astar_cost_var.get()
+                    h = astar_h_var.get()
+                    selected_solvers.append(f'astar-{cost}-{h}')
+                
+                if not selected_solvers:
+                    messagebox.showerror("No Solvers", "Please select at least one solver")
+                    return
+                
                 status_var.set("Running benchmark...")
                 dialog.update()
                 
                 # Import here to avoid circular dependency
                 from .benchmark import run_benchmarks
                 
-                # Run benchmark
-                stats = run_benchmarks(samples=samples, seed=seed)
+                # Run benchmark with selected solvers
+                stats = run_benchmarks(samples=samples, seed=seed, solvers=selected_solvers)
                 
                 # Display results
                 self.results_text.config(state="normal")
@@ -525,8 +682,24 @@ class WordleGUI:
                 result_lines.append("-" * 80 + "\n")
                 
                 for solver_name, stat in stats.items():
+                    # Format solver name with configuration details
+                    if solver_name == 'bfs-opt':
+                        display_name = 'BFS'
+                    elif solver_name == 'dfs-opt':
+                        display_name = 'DFS'
+                    elif solver_name.startswith('ucs-'):
+                        cost = solver_name.split('-')[1]
+                        display_name = f'UCS (cost={cost})'
+                    elif solver_name.startswith('astar-'):
+                        parts = solver_name.split('-')
+                        cost = parts[1]
+                        h = parts[2] if len(parts) > 2 else 'unknown'
+                        display_name = f'A* (cost={cost}, h={h})'
+                    else:
+                        display_name = solver_name
+                    
                     row = [
-                        self.SOLVER_DISPLAY_NAMES.get(solver_name, solver_name).upper(),
+                        display_name,
                         f"{stat.success_rate * 100:.0f}%",
                         f"{stat.avg_time_ms:.2f}ms",
                         f"{stat.max_time_ms:.2f}ms",

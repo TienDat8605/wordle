@@ -3,9 +3,8 @@ __pycache__/
 .venv/
 .serena/
 .github/
+.cache/
 build/
 dist/
-cache
-.cache/
 *.pkl
 *.spec

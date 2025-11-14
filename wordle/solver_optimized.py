@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import heapq
-from collections import deque
+import math
+from collections import Counter, deque
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Sequence, Set, Tuple
 
@@ -67,6 +68,95 @@ class CompactState:
         return cls(history=compact_history, remaining_count=remaining)
 
 
+# ============================================================================
+# COST FUNCTIONS (for UCS and g(n) in A*)
+# ============================================================================
+
+def cost_constant(before_count: int, after_count: int, word_length: int = 5) -> float:
+    """C1: Constant cost = 1 (baseline, makes UCS behave like BFS)."""
+    return 1.0
+
+
+def cost_candidate_reduction(before_count: int, after_count: int, word_length: int = 5) -> float:
+    """C2: Cost = 1 + (after/before). Rewards guesses that shrink candidate space."""
+    if before_count == 0:
+        return 1.0
+    return 1.0 + (after_count / before_count)
+
+
+def cost_partition_balance(before_count: int, after_count: int, word_length: int = 5, 
+                           largest_partition: int = 0) -> float:
+    """C3: Cost = 1 + (largest_partition/total). Rewards balanced splits."""
+    if before_count == 0:
+        return 1.0
+    # Use after_count as proxy for largest partition if not provided
+    effective_largest = largest_partition if largest_partition > 0 else after_count
+    return 1.0 + (effective_largest / before_count)
+
+
+def cost_entropy_inverse(before_count: int, after_count: int, word_length: int = 5,
+                         entropy: float = 0.0, max_entropy: float = 1.0) -> float:
+    """C4: Cost = 2 - (entropy/max_entropy). High entropy = cheap (good split)."""
+    if max_entropy == 0:
+        return 1.0
+    return 2.0 - (entropy / max_entropy)
+
+
+# Available cost functions
+COST_FUNCTIONS = {
+    'constant': cost_constant,
+    'reduction': cost_candidate_reduction,
+    'partition': cost_partition_balance,
+    'entropy': cost_entropy_inverse,
+}
+
+
+# ============================================================================
+# HEURISTIC FUNCTIONS (for A* only, in f(n) = g(n) + h(n))
+# ============================================================================
+
+def heuristic_ratio(remaining: int, word_length: int = 5) -> float:
+    """H1: remaining / word_length (current implementation, weak)."""
+    return remaining / max(1, word_length)
+
+
+def heuristic_remaining(remaining: int, word_length: int = 5) -> float:
+    """H2: remaining count directly (simple but large)."""
+    return float(remaining)
+
+
+def heuristic_log2(remaining: int, word_length: int = 5) -> float:
+    """H3: log2(remaining) - BEST simple heuristic (admissible & consistent)."""
+    return math.log2(max(1, remaining))
+
+
+def heuristic_entropy_gap(remaining: int, word_length: int = 5, 
+                          current_entropy: float = 0.0, max_entropy: float = 1.0) -> float:
+    """H4: max_entropy - current_entropy (strong but requires entropy computation)."""
+    return max_entropy - current_entropy
+
+
+def heuristic_partition(remaining: int, word_length: int = 5, 
+                        largest_partition: int = 0) -> float:
+    """H5: log2(largest_partition) (precise, worst-case aware)."""
+    effective_largest = largest_partition if largest_partition > 0 else remaining
+    return math.log2(max(1, effective_largest))
+
+
+# Available heuristic functions
+HEURISTIC_FUNCTIONS = {
+    'ratio': heuristic_ratio,
+    'remaining': heuristic_remaining,
+    'log2': heuristic_log2,
+    'entropy': heuristic_entropy_gap,
+    'partition': heuristic_partition,
+}
+
+
+# ============================================================================
+# SOLVER BASE CLASS
+# ============================================================================
+
 class OptimizedGraphSearchSolver:
     """Base class for optimized graph search with feedback caching."""
 
@@ -76,15 +166,19 @@ class OptimizedGraphSearchSolver:
     _shared_feedback_table: FeedbackTable | None = None
     _shared_word_list: List[str] = []
 
-    def __init__(self, word_length: int = 5, max_branching: int = 50) -> None:
-        """Initialize solver with branching limit.
+    def __init__(self, word_length: int = 5, max_branching: int = 50, 
+                 cost_fn: str = 'constant') -> None:
+        """Initialize solver with branching limit and cost function.
         
         Args:
             word_length: Length of words in the puzzle.
             max_branching: Maximum number of guesses to consider per state.
+            cost_fn: Name of cost function to use (for UCS and A*).
         """
         self.word_length = word_length
         self.max_branching = max_branching
+        self.cost_fn_name = cost_fn
+        self.cost_fn = COST_FUNCTIONS.get(cost_fn, cost_constant)
 
     def solve(
         self, answer: str, word_pool: Sequence[str], max_attempts: int = 6
@@ -167,7 +261,12 @@ class OptimizedGraphSearchSolver:
 
                 new_history = history + ((guess, feedback),)
                 new_state = CompactState.from_history(new_history, len(new_possible))
-                new_depth = depth + 1
+                
+                # Compute step cost
+                step_cost = self._compute_step_cost(
+                    guess, len(possible_indices), len(new_possible)
+                )
+                new_depth = depth + step_cost
 
                 generated_nodes += 1
                 priority = self._priority(new_state, new_depth, len(new_possible))
@@ -183,7 +282,7 @@ class OptimizedGraphSearchSolver:
             frontier_max, explored_words, []
         )
 
-    def _select_guesses(self, possible_indices: Set[int], depth: int) -> List[int]:
+    def _select_guesses(self, possible_indices: Set[int], depth: float) -> List[int]:
         """Select subset of promising guesses to limit branching.
         
         Strategy: prioritize words from the remaining possible set.
@@ -194,6 +293,24 @@ class OptimizedGraphSearchSolver:
         
         # Use remaining words first (information-rich)
         return candidates[:self.max_branching]
+    
+    def _compute_step_cost(self, guess: str, before_count: int, after_count: int) -> float:
+        """Compute the cost of taking this guess step.
+        
+        Args:
+            guess: The word being guessed.
+            before_count: Number of candidates before this guess.
+            after_count: Number of candidates after this guess.
+        
+        Returns:
+            The step cost according to the selected cost function.
+        """
+        # Get unique letters and check for duplicates
+        unique_letters = len(set(guess))
+        has_duplicates = unique_letters < len(guess)
+        
+        # Call the cost function
+        return self.cost_fn(before_count, after_count, self.word_length)
 
     def _filter_candidates(
         self, possible_indices: Set[int], guess_idx: int, feedback: Feedback
@@ -238,12 +355,12 @@ class OptimizedGraphSearchSolver:
         state: CompactState,
         history: Tuple[Tuple[str, Feedback], ...],
         possible: Set[int],
-        depth: int,
+        depth: float,
         sequence: int,
     ) -> None:
         raise NotImplementedError
 
-    def _pop_frontier(self, frontier) -> Tuple[CompactState, Tuple[Tuple[str, Feedback], ...], Set[int], int]:
+    def _pop_frontier(self, frontier) -> Tuple[CompactState, Tuple[Tuple[str, Feedback], ...], Set[int], float]:
         raise NotImplementedError
 
     def _frontier_empty(self, frontier) -> bool:
@@ -252,7 +369,7 @@ class OptimizedGraphSearchSolver:
     def _frontier_size(self, frontier) -> int:
         raise NotImplementedError
 
-    def _priority(self, state: CompactState, depth: int, remaining: int) -> float:
+    def _priority(self, state: CompactState, depth: float, remaining: int) -> float:
         return float(depth)
 
 
@@ -299,9 +416,13 @@ class OptimizedDFS(OptimizedGraphSearchSolver):
 
 
 class OptimizedUCS(OptimizedGraphSearchSolver):
-    """Optimized uniform cost search."""
+    """Optimized uniform cost search with configurable cost function."""
 
     name = "ucs-opt"
+
+    def __init__(self, word_length: int = 5, max_branching: int = 50, cost_fn: str = 'constant'):
+        """Initialize UCS with cost function."""
+        super().__init__(word_length, max_branching, cost_fn)
 
     def _create_frontier(self):
         return []
@@ -322,9 +443,23 @@ class OptimizedUCS(OptimizedGraphSearchSolver):
 
 
 class OptimizedAStar(OptimizedGraphSearchSolver):
-    """Optimized A* search with remaining candidates heuristic."""
+    """Optimized A* search with configurable cost and heuristic functions."""
 
     name = "astar-opt"
+
+    def __init__(self, word_length: int = 5, max_branching: int = 50, 
+                 cost_fn: str = 'constant', heuristic_fn: str = 'log2'):
+        """Initialize A* with cost and heuristic functions.
+        
+        Args:
+            word_length: Length of words in the puzzle.
+            max_branching: Maximum number of guesses to consider per state.
+            cost_fn: Name of cost function to use.
+            heuristic_fn: Name of heuristic function to use.
+        """
+        super().__init__(word_length, max_branching, cost_fn)
+        self.heuristic_fn_name = heuristic_fn
+        self.heuristic_fn = HEURISTIC_FUNCTIONS.get(heuristic_fn, heuristic_log2)
 
     def _create_frontier(self):
         return []
@@ -343,20 +478,35 @@ class OptimizedAStar(OptimizedGraphSearchSolver):
     def _frontier_size(self, frontier):
         return len(frontier)
 
-    def _priority(self, state: CompactState, depth: int, remaining: int) -> float:
-        """A* priority: cost + heuristic (remaining candidates as proxy for distance)."""
-        # Heuristic: fewer remaining words = closer to solution
-        heuristic = remaining / max(1, self.word_length)
+    def _priority(self, state: CompactState, depth: float, remaining: int) -> float:
+        """A* priority: g(n) + h(n) where g is cost and h is heuristic."""
+        heuristic = self.heuristic_fn(remaining, self.word_length)
         return depth + heuristic
 
 
-# Registry of optimized solvers
-OPTIMIZED_SOLVERS = {
-    solver.name: solver
-    for solver in [
-        OptimizedBFS(max_branching=30),
-        OptimizedDFS(max_branching=30),
-        OptimizedUCS(max_branching=30),
-        OptimizedAStar(max_branching=30),
-    ]
-}
+# Registry of optimized solvers with various configurations
+def _build_solver_registry():
+    """Build registry with all solver configurations."""
+    registry = {}
+    
+    # BFS and DFS (don't use cost/heuristic)
+    registry['bfs-opt'] = OptimizedBFS(max_branching=30)
+    registry['dfs-opt'] = OptimizedDFS(max_branching=30)
+    
+    # UCS with different cost functions
+    for cost_name in COST_FUNCTIONS.keys():
+        solver = OptimizedUCS(max_branching=30, cost_fn=cost_name)
+        solver.name = f"ucs-{cost_name}"
+        registry[solver.name] = solver
+    
+    # A* with different cost and heuristic combinations
+    for cost_name in COST_FUNCTIONS.keys():
+        for heuristic_name in HEURISTIC_FUNCTIONS.keys():
+            solver = OptimizedAStar(max_branching=30, cost_fn=cost_name, heuristic_fn=heuristic_name)
+            solver.name = f"astar-{cost_name}-{heuristic_name}"
+            registry[solver.name] = solver
+    
+    return registry
+
+
+OPTIMIZED_SOLVERS = _build_solver_registry()
