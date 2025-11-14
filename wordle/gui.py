@@ -674,15 +674,12 @@ class WordleGUI:
                 
                 result_lines = [
                     f"Benchmark Results (samples={samples}, seed={seed})\n",
-                    "=" * 80 + "\n\n",
+                    "=" * 100 + "\n\n",
                 ]
                 
-                headers = ["Solver", "Success", "Avg Time", "Max Time", "Avg Mem", "Max Mem", "Avg Nodes"]
-                result_lines.append(" | ".join(f"{h:<10}" for h in headers) + "\n")
-                result_lines.append("-" * 80 + "\n")
-                
-                for solver_name, stat in stats.items():
-                    # Format solver name with configuration details
+                # First pass: collect display names and determine column widths
+                display_names = []
+                for solver_name in stats.keys():
                     if solver_name == 'bfs-opt':
                         display_name = 'BFS'
                     elif solver_name == 'dfs-opt':
@@ -697,6 +694,34 @@ class WordleGUI:
                         display_name = f'A* (cost={cost}, h={h})'
                     else:
                         display_name = solver_name
+                    display_names.append(display_name)
+                
+                # Calculate column widths based on header and data
+                headers = ["Solver", "Success", "Avg Time", "Max Time", "Avg Mem", "Max Mem", "Avg Nodes"]
+                col_widths = [len(h) for h in headers]
+                
+                # Update solver column width based on actual display names
+                col_widths[0] = max(col_widths[0], max(len(name) for name in display_names) if display_names else 0)
+                
+                # Increase column widths for better readability (except Success column)
+                col_widths[0] = max(col_widths[0], 35)  # Solver
+                col_widths[1] = 8  # Success (keep compact)
+                col_widths[2] = 14  # Avg Time
+                col_widths[3] = 14  # Max Time
+                col_widths[4] = 14  # Avg Mem
+                col_widths[5] = 14  # Max Mem
+                col_widths[6] = 12  # Avg Nodes
+                
+                # Create separator line
+                separator = " | ".join("-" * width for width in col_widths)
+                
+                # Add header
+                result_lines.append(" | ".join(f"{h:<{col_widths[i]}}" for i, h in enumerate(headers)) + "\n")
+                result_lines.append(separator + "\n")
+                
+                # Add data rows
+                for i, (solver_name, stat) in enumerate(stats.items()):
+                    display_name = display_names[i]
                     
                     row = [
                         display_name,
@@ -707,9 +732,9 @@ class WordleGUI:
                         f"{stat.max_peak_kib:.1f}KB",
                         f"{stat.avg_nodes_expanded:.1f}",
                     ]
-                    result_lines.append(" | ".join(f"{v:<10}" for v in row) + "\n")
+                    result_lines.append(" | ".join(f"{v:<{col_widths[j]}}" for j, v in enumerate(row)) + "\n")
                 
-                result_lines.append("\n" + "=" * 80 + "\n")
+                result_lines.append("\n" + "=" * 100 + "\n")
                 
                 self.results_text.insert("1.0", "".join(result_lines))
                 self.results_text.config(state="disabled")
