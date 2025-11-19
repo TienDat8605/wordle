@@ -18,9 +18,11 @@ if [ ! -d ".cache" ]; then
 fi
 
 # Build feedback table cache if it doesn't exist
-if [ ! -f ".cache/feedback_table_2315_"*.pkl ]; then
-    echo "🔨 Building feedback table cache (this may take a few seconds)..."
-    python -c "from wordle.feedback_table import FeedbackTable; from wordle.words import WORD_LIST; FeedbackTable.build_or_load(WORD_LIST)"
+if ls .cache/feedback_table_*_sparse100.pkl 1> /dev/null 2>&1; then
+    echo "✓ Cache already exists"
+else
+    echo "🔨 Building sparse feedback table cache (max 100 connections per word)..."
+    python run_cache.py
 fi
 
 echo "🔧 Building executable with PyInstaller..."

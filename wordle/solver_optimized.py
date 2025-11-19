@@ -196,8 +196,9 @@ class OptimizedGraphSearchSolver:
             or OptimizedGraphSearchSolver._shared_word_list != list(word_pool)
         ):
             OptimizedGraphSearchSolver._shared_word_list = list(word_pool)
+            # Use sparse graph with max 100 connections per word to avoid OOM
             OptimizedGraphSearchSolver._shared_feedback_table = FeedbackTable(
-                OptimizedGraphSearchSolver._shared_word_list
+                OptimizedGraphSearchSolver._shared_word_list, max_connections=100
             )
 
         word_list = OptimizedGraphSearchSolver._shared_word_list

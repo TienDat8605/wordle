@@ -3,13 +3,13 @@
 Python implementation of Wordle featuring an interactive GUI, AI solvers with **configurable cost and heuristic functions**, visual animations, and comprehensive benchmarking utilities.
 
 ## Features
-- Classic Wordle gameplay with a Tkinter GUI and curated 2,315-word dictionary
+- Classic Wordle gameplay with a Tkinter GUI and comprehensive 14,855-word dictionary
 - Direct cell input with keyboard navigation (type, backspace across cells, Enter to submit)
-- **24 AI solver configurations**: BFS, DFS, UCS (4 cost functions), A* (4 cost × 5 heuristic = 20 variants)
+- **26 AI solver configurations**: BFS, DFS, UCS (4 cost functions), A* (4 cost × 5 heuristic = 20 variants)
 - **Configurable search strategies**: Choose different cost functions (constant, candidate reduction, partition balance, entropy) and heuristics (ratio, remaining, log2, entropy gap, partition)
 - Search-based AI solvers with on-screen animation of their decision process
 - Benchmark harness measuring solver latency, memory usage (via `tracemalloc`), and node expansion counts
-- Persistent feedback table caching for instant startup (precomputed 5.3M feedback pairs)
+- **Sparse feedback table caching**: Optimized memory usage with max 100 connections per word (~1.5M pairs instead of 221M)
 - Extensible code structure for experimenting with additional heuristics or word lists
 
 ## Quick Start
@@ -22,12 +22,19 @@ Requirements: Python 3.8+ (standard library only, no external dependencies)
 git clone https://github.com/TienDat8605/wordle.git
 cd wordle
 
+# (Optional) Precompute feedback cache for faster first run
+python run_cache.py
+
 # Run the game
 python -m wordle
 # Or: python run_game.py
 ```
 
-**Note**: First run takes 2-5 seconds to build feedback cache. Subsequent runs are instant (<100ms).
+**Note**: 
+- First run automatically builds sparse feedback cache (~2-5 seconds for 14,855 words)
+- Uses sparse graph optimization: max 100 connections per word to prevent OOM
+- Subsequent runs load from cache instantly (<100ms)
+- Cache stored in `.cache/` directory (~113 MB)
 
 ## Usage
 
@@ -132,14 +139,15 @@ Wordle/
 ├── wordle/               # Main package
 │   ├── game.py           # Core game logic
 │   ├── gui.py            # Tkinter UI
-│   ├── solver_optimized.py  # Search algorithms (32 configs)
+│   ├── solver_optimized.py  # Search algorithms (26 configs)
 │   ├── feedback.py       # Feedback evaluation
-│   ├── feedback_table.py # Precomputed cache
+│   ├── feedback_table.py # Sparse feedback cache (max 100 connections/word)
 │   ├── knowledge.py      # Constraint tracking
-│   ├── words.py          # 2,315-word dataset
+│   ├── words.py          # 14,855-word dataset loader
 │   └── benchmark.py      # Performance testing
-├── valid_solutions.csv   # Word list
-├── run_game.py           # Launcher
+├── valid_solutions.csv   # 14,855 five-letter words
+├── run_game.py           # Game launcher
+├── run_cache.py          # Precompute feedback cache
 ├── run_benchmarks.py     # CLI benchmarking
 ├── build_executable.sh   # Linux/Mac build script
 ├── build_executable.bat  # Windows build script
@@ -149,8 +157,11 @@ Wordle/
 
 ## Technical Highlights
 
-- **32 Solver Configurations**: Combine 5 cost functions with 5 heuristics for experimentation
-- **Precomputed Feedback Table**: 5.3M pairs cached (2-5s first run, <100ms after)
+- **26 Solver Configurations**: Combine 4 cost functions with 5 heuristics for experimentation
+- **Sparse Feedback Table**: ~1.5M pairs cached (99.3% memory reduction vs full table)
+  - Max 100 random connections per word (sparse graph optimization)
+  - Prevents OOM on 14,855-word dataset (would be 221M pairs otherwise)
+  - Fallback to on-the-fly computation for cache misses
 - **Efficient State Representation**: Immutable frozen dataclass for O(1) hashing
 - **Constraint Propagation**: Incremental filtering reduces search space
 - **Branching Limiting**: Max 30 candidates per state prevents blowup

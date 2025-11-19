@@ -31,8 +31,13 @@ if not exist ".cache" (
 )
 
 REM Build feedback table cache
-echo Building feedback table cache...
-python -c "from wordle.feedback_table import FeedbackTable; from wordle.words import WORD_LIST; FeedbackTable(WORD_LIST)"
+echo Building sparse feedback table cache (max 100 connections per word)...
+python run_cache.py
+if errorlevel 1 (
+    echo ERROR: Failed to build cache.
+    pause
+    exit /b 1
+)
 
 echo.
 echo Running PyInstaller...
