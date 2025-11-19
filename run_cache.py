@@ -25,7 +25,7 @@ def main():
     
     print()
     print("=" * 60)
-    print("✓ Cache build complete!")
+    print("[OK] Cache build complete!")
     print("You can now run: python -m wordle")
     print("=" * 60)
 

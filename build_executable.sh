@@ -1,31 +1,31 @@
 #!/bin/bash
 # Build script for creating Wordle executable
 
-echo "🎮 Building Wordle Executable..."
+echo "Building Wordle Executable..."
 echo ""
 
 # Check if PyInstaller is installed
 if ! command -v pyinstaller &> /dev/null
 then
-    echo "📦 Installing PyInstaller..."
+    echo "Installing PyInstaller..."
     pip install pyinstaller
 fi
 
 # Create cache directory if it doesn't exist
 if [ ! -d ".cache" ]; then
-    echo "📁 Creating cache directory..."
+    echo "Creating cache directory..."
     mkdir -p .cache
 fi
 
 # Build feedback table cache if it doesn't exist
 if ls .cache/feedback_table_*_sparse100.pkl 1> /dev/null 2>&1; then
-    echo "✓ Cache already exists"
+    echo "[OK] Cache already exists"
 else
-    echo "🔨 Building sparse feedback table cache (max 100 connections per word)..."
+    echo "Building sparse feedback table cache (max 100 connections per word)..."
     python run_cache.py
 fi
 
-echo "🔧 Building executable with PyInstaller..."
+echo "Building executable with PyInstaller..."
 pyinstaller --noconfirm \
     --name "WordleAI" \
     --onefile \
@@ -39,9 +39,9 @@ pyinstaller --noconfirm \
     run_game.py
 
 echo ""
-echo "✅ Build complete!"
+echo "[OK] Build complete!"
 echo ""
-echo "📍 Executable location: dist/WordleAI"
+echo "Executable location: dist/WordleAI"
 echo ""
 echo "To run the game:"
 echo "  ./dist/WordleAI          (Linux/Mac)"

@@ -5,8 +5,8 @@ Python implementation of Wordle featuring an interactive GUI, AI solvers with **
 ## Features
 - Classic Wordle gameplay with a Tkinter GUI and comprehensive 14,855-word dictionary
 - Direct cell input with keyboard navigation (type, backspace across cells, Enter to submit)
-- **26 AI solver configurations**: BFS, DFS, UCS (4 cost functions), A* (4 cost × 5 heuristic = 20 variants)
-- **Configurable search strategies**: Choose different cost functions (constant, candidate reduction, partition balance, entropy) and heuristics (ratio, remaining, log2, entropy gap, partition)
+- **14 AI solver configurations**: BFS, DFS, UCS (4 cost functions), A* (4 cost × 2 heuristic = 8 variants)
+- **Configurable search strategies**: Choose different cost functions (constant, candidate reduction, partition balance, entropy) and admissible heuristics (log2, partition)
 - Search-based AI solvers with on-screen animation of their decision process
 - Benchmark harness measuring solver latency, memory usage (via `tracemalloc`), and node expansion counts
 - **Sparse feedback table caching**: Optimized memory usage with max 100 connections per word (~1.5M pairs instead of 221M)
@@ -75,7 +75,7 @@ Cost functions determine **g(n)** – the accumulated cost to reach state n. Low
 | Function | Mathematical Formula | Description | Use Case |
 |----------|---------------------|-------------|----------|
 | **constant** | $c(s) = 1$ | Every guess costs the same | Baseline (UCS = BFS) |
-| **reduction** | $c(s) = 1 + \frac{\|C_{after}\|}{\|C_{before}\|}$ | Rewards candidate elimination | ⭐ **RECOMMENDED** |
+| **reduction** | $c(s) = 1 + \frac{\|C_{after}\|}{\|C_{before}\|}$ | Rewards candidate elimination | **RECOMMENDED** |
 | **partition** | $c(s) = 1 + \frac{\max(\|P_i\|)}{\|C_{before}\|}$ | Penalizes large partitions | Avoids worst-case |
 | **entropy** | $c(s) = 2 - \frac{H(X)}{H_{max}}$ | High entropy = cheap | Information theory |
 
@@ -89,13 +89,12 @@ Where:
 ### Heuristic Functions (A* only)
 Heuristics estimate **h(n)** – the remaining cost to reach the goal. Used in A* priority: $f(n) = g(n) + h(n)$
 
+Only **admissible heuristics** are included to guarantee optimal solutions.
+
 | Function | Mathematical Formula | Admissible? | Description |
 |----------|---------------------|-------------|-------------|
-| **ratio** | $h(n) = \frac{\|C_{remaining}\|}{5}$ | ❌ | Simple division by word length |
-| **remaining** | $h(n) = \|C_{remaining}\|$ | ❌ | Direct candidate count |
-| **log2** | $h(n) = \log_2(\|C_{remaining}\|)$ | ✅ | Minimum binary splits needed ⭐ |
-| **entropy** | $h(n) = H_{max} - H(X)$ | ❌ | Information gap to certainty |
-| **partition** | $h(n) = \log_2(\max(\|P_i\|))$ | ✅ | Worst-case partition size |
+| **log2** | $h(n) = \log_2(\|C_{remaining}\|)$ | Yes | Minimum binary splits needed. **RECOMMENDED** |
+| **partition** | $h(n) = \log_2(\max(\|P_i\|))$ | Yes | Worst-case partition size |
 
 **Admissibility**: A heuristic is admissible if $h(n) \leq h^*(n)$ (never overestimates true cost). Admissible heuristics guarantee optimal solutions in A*.
 
@@ -157,7 +156,7 @@ Wordle/
 
 ## Technical Highlights
 
-- **26 Solver Configurations**: Combine 4 cost functions with 5 heuristics for experimentation
+- **14 Solver Configurations**: Combine 4 cost functions with 2 admissible heuristics for experimentation
 - **Sparse Feedback Table**: ~1.5M pairs cached (99.3% memory reduction vs full table)
   - Max 100 random connections per word (sparse graph optimization)
   - Prevents OOM on 14,855-word dataset (would be 221M pairs otherwise)

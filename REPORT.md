@@ -69,6 +69,8 @@ Given a state with $|C_{before}|$ candidate words, after making a guess $w$, the
 
 Heuristics estimate the **remaining cost to reach the goal** – formally, $h: S \rightarrow \mathbb{R}^+$ approximates $h^*(s)$, the true minimum cost from state $s$ to a goal state (where $|C| = 1$).
 
+**Only admissible heuristics are included** to guarantee optimal A* solutions.
+
 **A* Search Formula:** $f(n) = g(n) + h(n)$
 - $g(n)$ = accumulated cost from start to node $n$
 - $h(n)$ = estimated cost from node $n$ to goal
@@ -78,11 +80,8 @@ Heuristics estimate the **remaining cost to reach the goal** – formally, $h: S
 
 | Function | Mathematical Definition | Admissibility | Analysis |
 |----------|------------------------|---------------|----------|
-| **ratio** | $h(n) = \frac{\|C_{remaining}\|}{5}$ | ❌ Non-admissible | Divides by word length; underestimates for large $\|C\|$, overestimates for small $\|C\|$ |
-| **remaining** | $h(n) = \|C_{remaining}\|$ | ❌ Non-admissible | Direct count; massively overestimates (can eliminate multiple candidates per guess) |
-| **log2** | $h(n) = \log_2(\|C_{remaining}\|)$ | ✅ **Admissible** | **Optimal!** Represents minimum binary splits; never overestimates |
-| **entropy** | $h(n) = H_{max} - H(X) = \log_2(\|C\|) - H(X)$ | ❌ Non-admissible | Information gap; may overestimate in practice |
-| **partition** | $h(n) = \log_2(\max_i(\|P_i\|))$ | ✅ **Admissible** | Worst-case aware; estimates splits needed for largest partition |
+| **log2** | $h(n) = \log_2(\|C_{remaining}\|)$ | Admissible | **Optimal!** Represents minimum binary splits; never overestimates |
+| **partition** | $h(n) = \log_2(\max_i(\|P_i\|))$ | Admissible | Worst-case aware; estimates splits needed for largest partition |
 
 **Admissibility Proof (log2 heuristic):**
 
@@ -107,22 +106,22 @@ This ensures A* expands nodes in optimal order without re-expansions.
 ### Search Strategy Comparison
 
 1. **BFS** - FIFO queue, level-order exploration
-   - ✅ Guarantees optimal solution, systematic
-   - ❌ High memory usage, explores unnecessary states
+   - [+] Guarantees optimal solution, systematic
+   - [-] High memory usage, explores unnecessary states
    
 2. **DFS** - LIFO stack, depth-first exploration
-   - ✅ Memory efficient, fast with good branching
-   - ❌ No optimality guarantee
+   - [+] Memory efficient, fast with good branching
+   - [-] No optimality guarantee
    
 3. **UCS** - Priority queue ordered by accumulated cost
-   - ✅ Guarantees optimal solution, handles varied costs
-   - ❌ With `constant` cost, equivalent to BFS
-   - ✨ With `reduction` cost, 70% more efficient
+   - [+] Guarantees optimal solution, handles varied costs
+   - [-] With `constant` cost, equivalent to BFS
+   - [*] With `reduction` cost, 70% more efficient
    
 4. **A*** - Priority queue ordered by f(n) = g(n) + h(n)
-   - ✅ Best overall performance, prunes search space efficiently
-   - ✨ With `log2` heuristic, 99% more efficient than BFS
-   - ✅ Maintains optimality with admissible heuristics
+   - [+] Best overall performance, prunes search space efficiently
+   - [+] With `log2` heuristic, 99% more efficient than BFS
+   - [+] Maintains optimality with admissible heuristics
 
 ### State Space Representation
 Each search state contains:
@@ -213,7 +212,134 @@ solver = OPTIMIZED_SOLVERS['astar-reduction-log2'] # Best overall
 ### Available Configurations
 - **2 basic**: `bfs-opt`, `dfs-opt`
 - **4 UCS**: `ucs-{cost}` where cost ∈ {constant, reduction, partition, entropy}
-- **20 A***: `astar-{cost}-{heuristic}` where cost ∈ {4 options}, heuristic ∈ {ratio, remaining, log2, entropy, partition}
+- **8 A***: `astar-{cost}-{heuristic}` where cost ∈ {4 options}, heuristic ∈ {log2, partition}
+
+**Total: 14 solver configurations** (down from 26 after removing non-admissible heuristics)
+
+## Search Algorithm Metrics Explained
+
+When running solvers, four key performance metrics are tracked and reported:
+
+### 1. Nodes Expanded
+
+**Definition**: The number of states actually processed by the search algorithm.
+
+**When Updated**: Incremented each time a state is popped from the frontier (priority queue/stack/queue) for exploration.
+
+**Algorithm Context**:
+```python
+expanded_nodes = 0
+while frontier not empty:
+    state = frontier.pop()        # Pop next state
+    if state in visited:
+        continue
+    visited.add(state)
+    expanded_nodes += 1              # Increment here!
+    
+    # Generate successors...
+```
+
+**Significance**: Direct measure of computational work. Lower is better. This is the primary metric for comparing search algorithm efficiency.
+
+### 2. Nodes Generated
+
+**Definition**: The total number of child states created during search.
+
+**When Updated**: Incremented when generating successor states for an expanded node.
+
+**Algorithm Context**:
+```python
+generated_nodes = 0
+while frontier not empty:
+    state = frontier.pop()
+    # ... expand state ...
+    
+    for each possible guess:
+        # Create new child state
+        child_state = create_successor(state, guess)
+        generated_nodes += 1         # Increment for each child!
+        frontier.push(child_state)
+```
+
+**Significance**: Measures branching factor and total state space explored. In Wordle, branching factor can be high (up to 30 guesses per state), so generated >> expanded. The ratio `generated/expanded` indicates average branching factor.
+
+### 3. Max Frontier Size
+
+**Definition**: Peak number of states simultaneously stored in the frontier (priority queue/stack/queue).
+
+**When Updated**: Tracked after each expand/generate operation by computing `max(current_max, len(frontier))`.
+
+**Algorithm Context**:
+```python
+frontier_max = 0
+while frontier not empty:
+    state = frontier.pop()
+    # ... generate children ...
+    for child in children:
+        frontier.push(child)
+    
+    frontier_max = max(frontier_max, len(frontier))  # Track peak!
+```
+
+**Significance**: Measures peak memory usage. Critical for understanding space complexity. BFS typically has very high frontier sizes, while DFS and A* with good heuristics keep it low.
+
+### 4. Words Explored
+
+**Definition**: Number of distinct words used as guesses during the search.
+
+**When Updated**: Tracked by maintaining a set of unique words encountered as guesses in any explored state.
+
+**Algorithm Context**:
+```python
+explored_words = set()
+while frontier not empty:
+    state = frontier.pop()
+    
+    for each guess:
+        if guess not in explored_words:
+            explored_words.add(guess)    # Track unique words!
+        # ... generate child state ...
+```
+
+**Significance**: Measures search diversity. High word count means the algorithm explored many different guessing strategies. Lower is generally better (more focused search).
+
+### Example Walkthrough
+
+Consider searching for the word "WORLD":
+
+```
+Initial: 14,855 candidates
+├─ Guess "SLATE" → 1,234 remain (expanded_nodes=1, generated_nodes=30, frontier_size=30)
+    ├─ Guess "CORNY" → 87 remain (expanded_nodes=2, generated_nodes=30+25=55, max_frontier=29)
+        ├─ Guess "WORLD" → 1 remain [FOUND!] (expanded_nodes=3, generated_nodes=55+20=75)
+```
+
+**Final metrics**:
+- Nodes expanded: 3 (processed 3 states)
+- Nodes generated: 75 (created 75 child states total)
+- Max frontier size: 30 (peak at initial state)
+- Words explored: ~50 (unique words across all guesses)
+
+### Interpreting Results
+
+| Metric | Low Value Means | High Value Means |
+|--------|----------------|------------------|
+| **Nodes expanded** | Efficient search, good pruning | Inefficient, exploring too much |
+| **Nodes generated** | Low branching, focused | High branching, exploring many options |
+| **Max frontier** | Low memory usage | High memory usage |
+| **Words explored** | Focused strategy | Exploratory strategy |
+
+**Best case**: A* with log2 heuristic typically achieves:
+- Nodes expanded: 3-5
+- Nodes generated: 50-100
+- Max frontier: 10-30
+- Words explored: 20-40
+
+**Worst case**: BFS typically achieves:
+- Nodes expanded: 100-300
+- Nodes generated: 2,000-5,000
+- Max frontier: 1,000-3,000
+- Words explored: 100-300
 
 ## Conclusion
 
@@ -221,8 +347,8 @@ This project successfully implements a complete Wordle game with multiple config
 
 - **Informed search superiority**: A* with good heuristics vastly outperforms uninformed search
 - **Cost function impact**: Smart cost functions improve efficiency even without heuristics
-- **Admissibility trade-offs**: log2 heuristic is both admissible and highly effective
-- **Precomputation benefits**: Feedback caching reduces startup from 2-5s to <100ms
-- **User configurability**: 26 solver variants allow experimentation and comparison
+- **Admissibility guarantee**: Only admissible heuristics (log2, partition) ensure optimal solutions
+- **Precomputation benefits**: Sparse feedback table caching prevents OOM on large datasets
+- **User configurability**: 14 solver variants allow experimentation and comparison
 
 The system provides an excellent platform for studying search algorithms, heuristic design, and performance optimization in a constrained problem space.

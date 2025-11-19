@@ -46,10 +46,10 @@ class FeedbackTable:
             try:
                 with open(cache_file, "rb") as f:
                     self._table = pickle.load(f)
-                print(f"  ✓ Loaded {len(self._table)} entries from cache")
+                print(f"  [OK] Loaded {len(self._table)} entries from cache")
                 return
             except Exception as e:
-                print(f"  ⚠ Cache load failed: {e}, rebuilding...")
+                print(f"  [WARNING] Cache load failed: {e}, rebuilding...")
         
         # Build the sparse table
         print(f"Building sparse feedback table for {len(word_list)} words...", flush=True)
@@ -76,15 +76,15 @@ class FeedbackTable:
                     key = (guess.lower(), target.lower())
                     self._table[key] = evaluate_guess(target, guess)
         
-        print(f"  ✓ Sparse feedback table built: {len(self._table)} entries" + " " * 20)
+        print(f"  [OK] Sparse feedback table built: {len(self._table)} entries" + " " * 20)
         
         # Save to cache
         try:
             with open(cache_file, "wb") as f:
                 pickle.dump(self._table, f, protocol=pickle.HIGHEST_PROTOCOL)
-            print(f"  ✓ Saved to cache: {cache_file.name}")
+            print(f"  [OK] Saved to cache: {cache_file.name}")
         except Exception as e:
-            print(f"  ⚠ Cache save failed: {e}")
+            print(f"  [WARNING] Cache save failed: {e}")
 
     def get_feedback(self, guess: str, target: str) -> Feedback:
         """Retrieve feedback, using cache or computing on-the-fly.

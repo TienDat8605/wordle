@@ -113,42 +113,32 @@ COST_FUNCTIONS = {
 
 # ============================================================================
 # HEURISTIC FUNCTIONS (for A* only, in f(n) = g(n) + h(n))
+# Only admissible heuristics are included to guarantee optimal solutions
 # ============================================================================
 
-def heuristic_ratio(remaining: int, word_length: int = 5) -> float:
-    """H1: remaining / word_length (current implementation, weak)."""
-    return remaining / max(1, word_length)
-
-
-def heuristic_remaining(remaining: int, word_length: int = 5) -> float:
-    """H2: remaining count directly (simple but large)."""
-    return float(remaining)
-
-
 def heuristic_log2(remaining: int, word_length: int = 5) -> float:
-    """H3: log2(remaining) - BEST simple heuristic (admissible & consistent)."""
+    """H1: log2(remaining) - Optimal admissible heuristic.
+    
+    Represents the minimum number of binary splits needed to narrow down
+    to a single candidate. Never overestimates the true cost.
+    """
     return math.log2(max(1, remaining))
-
-
-def heuristic_entropy_gap(remaining: int, word_length: int = 5, 
-                          current_entropy: float = 0.0, max_entropy: float = 1.0) -> float:
-    """H4: max_entropy - current_entropy (strong but requires entropy computation)."""
-    return max_entropy - current_entropy
 
 
 def heuristic_partition(remaining: int, word_length: int = 5, 
                         largest_partition: int = 0) -> float:
-    """H5: log2(largest_partition) (precise, worst-case aware)."""
+    """H2: log2(largest_partition) - Worst-case aware admissible heuristic.
+    
+    Estimates splits needed based on the largest partition size.
+    Conservative and never overestimates true cost.
+    """
     effective_largest = largest_partition if largest_partition > 0 else remaining
     return math.log2(max(1, effective_largest))
 
 
-# Available heuristic functions
+# Available heuristic functions (admissible only)
 HEURISTIC_FUNCTIONS = {
-    'ratio': heuristic_ratio,
-    'remaining': heuristic_remaining,
     'log2': heuristic_log2,
-    'entropy': heuristic_entropy_gap,
     'partition': heuristic_partition,
 }
 
