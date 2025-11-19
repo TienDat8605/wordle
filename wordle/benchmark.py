@@ -31,7 +31,8 @@ class BenchmarkStats:
     avg_nodes_expanded: float
 
 
-def _benchmark_solver(solver_name: str, answers: Iterable[str]) -> BenchmarkStats:
+def _benchmark_solver(solver_name: str, answers: Iterable[str], 
+                      candidates_per_answer: Dict[str, List[str]]) -> BenchmarkStats:
     solver = OPTIMIZED_SOLVERS[solver_name]
     elapsed_times: List[float] = []
     peak_memories: List[int] = []
@@ -43,7 +44,8 @@ def _benchmark_solver(solver_name: str, answers: Iterable[str]) -> BenchmarkStat
         print(f"  {solver_name.upper()}: {idx}/{len(answers_list)} - {answer}", end="\r", flush=True)
         tracemalloc.start()
         start = time.perf_counter()
-        result: SolverResult = solver.solve(answer, WORD_LIST)
+        starting_cands = candidates_per_answer[answer]
+        result: SolverResult = solver.solve(answer, WORD_LIST, starting_candidates=starting_cands)
         elapsed = (time.perf_counter() - start) * 1000
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
@@ -88,6 +90,11 @@ def run_benchmarks(samples: int = 3, seed: int = 7, solvers: List[str] | None = 
     answers = [rng.choice(WORD_LIST) for _ in range(samples)]
     print(f"Benchmarking on {samples} random words: {', '.join(answers)}\n")
     
+    # Generate random starting candidates once per answer (all solvers use same candidates)
+    candidates_per_answer: Dict[str, List[str]] = {}
+    for answer in answers:
+        candidates_per_answer[answer] = rng.sample(WORD_LIST, 30)
+    
     # Use provided solvers or default to basic 4
     solver_list = solvers if solvers is not None else DEFAULT_BENCHMARK_SOLVERS
     
@@ -96,7 +103,7 @@ def run_benchmarks(samples: int = 3, seed: int = 7, solvers: List[str] | None = 
         if solver_name not in OPTIMIZED_SOLVERS:
             print(f"Warning: Solver '{solver_name}' not found, skipping...")
             continue
-        stats[solver_name] = _benchmark_solver(solver_name, answers)
+        stats[solver_name] = _benchmark_solver(solver_name, answers, candidates_per_answer)
     return stats
 
 

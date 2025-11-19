@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import heapq
 import math
+import random
 from collections import Counter, deque
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Sequence, Set, Tuple
@@ -24,6 +25,7 @@ class SolverResult:
     frontier_max: int
     explored_words: Optional[List[str]] = None  # Words explored during search
     final_path: Optional[List[str]] = None  # Final path taken (guesses only)
+    starting_candidates: Optional[List[str]] = None  # Starting candidates for this game
 
     def __post_init__(self):
         """Initialize derived fields if not provided."""
@@ -171,7 +173,8 @@ class OptimizedGraphSearchSolver:
         self.cost_fn = COST_FUNCTIONS.get(cost_fn, cost_constant)
 
     def solve(
-        self, answer: str, word_pool: Sequence[str], max_attempts: int = 6
+        self, answer: str, word_pool: Sequence[str], max_attempts: int = 6,
+        starting_candidates: Optional[List[str]] = None
     ) -> SolverResult:
         """Run the specific frontier strategy against an answer.
 
@@ -179,16 +182,24 @@ class OptimizedGraphSearchSolver:
             answer: The hidden solution word.
             word_pool: Available guess candidates.
             max_attempts: Maximum depth allowed by the puzzle.
+            starting_candidates: Optional list of starting words to consider for first guess.
+                               If None, randomly selects 30 words from word_pool.
         """
+        # Generate random starting candidates if not provided
+        if starting_candidates is None:
+            starting_candidates = random.sample(
+                list(word_pool), min(30, len(word_pool))
+            )
+        
         # Build feedback table once per word pool (shared across all solver instances)
         if (
             OptimizedGraphSearchSolver._shared_feedback_table is None
             or OptimizedGraphSearchSolver._shared_word_list != list(word_pool)
         ):
             OptimizedGraphSearchSolver._shared_word_list = list(word_pool)
-            # Use sparse graph with max 100 connections per word to avoid OOM
+            # Use sparse graph with max 200 connections per word to avoid OOM
             OptimizedGraphSearchSolver._shared_feedback_table = FeedbackTable(
-                OptimizedGraphSearchSolver._shared_word_list, max_connections=100
+                OptimizedGraphSearchSolver._shared_word_list, max_connections=200
             )
 
         word_list = OptimizedGraphSearchSolver._shared_word_list
@@ -197,6 +208,9 @@ class OptimizedGraphSearchSolver:
         # Convert to indices for faster operations
         word_to_idx = {w: i for i, w in enumerate(word_list)}
         answer_idx = word_to_idx[answer.lower()]
+        
+        # Store starting candidates as indices
+        self.starting_candidates_indices = {word_to_idx[w.lower()] for w in starting_candidates}
 
         # Root state: all words are possible
         root_state = CompactState.from_history(tuple(), len(word_list))
@@ -224,7 +238,7 @@ class OptimizedGraphSearchSolver:
                 final_path = [guess for guess, _ in history]
                 return SolverResult(
                     True, history, expanded_nodes, generated_nodes, 
-                    frontier_max, explored_words, final_path
+                    frontier_max, explored_words, final_path, starting_candidates
                 )
 
             if depth >= max_attempts:
@@ -270,19 +284,25 @@ class OptimizedGraphSearchSolver:
 
         return SolverResult(
             False, tuple(), expanded_nodes, generated_nodes, 
-            frontier_max, explored_words, []
+            frontier_max, explored_words, [], starting_candidates
         )
 
     def _select_guesses(self, possible_indices: Set[int], depth: float) -> List[int]:
         """Select subset of promising guesses to limit branching.
         
-        Strategy: prioritize words from the remaining possible set.
+        Strategy: At depth=0 (root state), use starting candidates.
+                 At depth>0, prioritize words from the remaining possible set.
         """
-        candidates = list(possible_indices)
+        if depth == 0:
+            # Root state: use only starting candidates
+            candidates = list(self.starting_candidates_indices & possible_indices)
+        else:
+            # Subsequent states: use remaining words
+            candidates = list(possible_indices)
+        
         if len(candidates) <= self.max_branching:
             return candidates
         
-        # Use remaining words first (information-rich)
         return candidates[:self.max_branching]
     
     def _compute_step_cost(self, guess: str, before_count: int, after_count: int) -> float:

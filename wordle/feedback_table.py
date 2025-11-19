@@ -18,14 +18,12 @@ class FeedbackTable:
     max_connections other words to avoid OOM on large datasets.
     """
 
-    def __init__(self, word_list: Sequence[str], max_connections: int = 100) -> None:
-        """Build or load the sparse feedback table for the given word list.
-        
+    def __init__(self, word_list: Sequence[str], max_connections: int = 200) -> None:
+        """Initialize feedback table with optional sparse graph optimization.
+
         Args:
-            word_list: List of valid words
-            max_connections: Maximum number of connections per word (default 100)
-                           to create a sparse graph and avoid memory issues.
-        
+            word_list: List of valid Wordle words
+            max_connections: Maximum number of connections per word (default 200)
         The table is cached to disk and only rebuilt if the word list changes.
         """
         self._table: Dict[Tuple[str, str], Feedback] = {}

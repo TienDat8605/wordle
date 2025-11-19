@@ -11,13 +11,13 @@ from typing import Dict, Set
 from wordle.words import WORD_LIST
 
 
-def build_connection_graph(word_list: list[str], max_connections: int = 100) -> Dict[str, Set[str]]:
-    """Rebuild the sparse connection graph using the same algorithm.
-    
+def build_connection_graph(word_list: list[str], max_connections: int = 200) -> Dict[str, Set[str]]:
+    """Build a sparse connection graph for the word list.
+
     Args:
         word_list: List of words
         max_connections: Maximum connections per word
-        
+    
     Returns:
         Dictionary mapping each word to its connected words
     """
@@ -72,15 +72,15 @@ def main():
     print("Cache Performance Estimation")
     print("=" * 70)
     print(f"Word list size: {len(WORD_LIST)}")
-    print(f"Max connections per word: 100")
-    print(f"Total cached pairs: {len(WORD_LIST) * 100:,}")
+    print(f"Max connections per word: 200")
+    print(f"Total cached pairs: {len(WORD_LIST) * 200:,}")
     print(f"Full table would be: {len(WORD_LIST) ** 2:,} pairs")
     print("=" * 70)
     print()
     
     # Build connection graph
     print("Building connection graph...")
-    connections = build_connection_graph(WORD_LIST, max_connections=100)
+    connections = build_connection_graph(WORD_LIST, max_connections=200)
     print(f"Connection graph built: {len(connections)} words")
     print()
     

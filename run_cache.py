@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Precompute the feedback table cache before running the game.
 
-This script builds the sparse feedback table (max 100 connections per word)
+This script builds the sparse feedback table (max 200 connections per word)
 and saves it to .cache/ for fast game startup.
 """
 
@@ -15,13 +15,13 @@ def main():
     print("Wordle Feedback Table Cache Builder")
     print("=" * 60)
     print(f"Word list size: {len(WORD_LIST)} words")
-    print(f"Sparse graph: max 100 connections per word")
-    print(f"Expected cache size: ~{len(WORD_LIST) * 100 / 1_000_000:.1f}M entries")
+    print(f"Sparse graph: max 200 connections per word")
+    print(f"Expected cache size: ~{len(WORD_LIST) * 200 / 1_000_000:.1f}M entries")
     print("=" * 60)
     print()
     
     # Build the feedback table (will cache automatically)
-    FeedbackTable(WORD_LIST, max_connections=100)
+    FeedbackTable(WORD_LIST, max_connections=200)
     
     print()
     print("=" * 60)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import tkinter as tk
 from tkinter import messagebox
 from typing import List, Tuple
@@ -40,6 +41,7 @@ class WordleGUI:
         self.pending_animation: list[Tuple[str, List[Mark]]] = []
         self.current_row = 0
         self.current_col = 0
+        self.starting_candidates = None  # Generated once per game
 
         self._build_widgets()
         self._render_board()
@@ -399,6 +401,8 @@ class WordleGUI:
         if self.animating:
             return
         self.game.reset()
+        # Generate new starting candidates for this game
+        self.starting_candidates = random.sample(WORD_LIST, 10)
         self._render_board()
         
         # Clear benchmark results
@@ -461,7 +465,10 @@ class WordleGUI:
         
         solver = OPTIMIZED_SOLVERS[solver_key]
         simulation = WordleGame(answer=self.game.answer, word_list=WORD_LIST)
-        result = solver.solve(simulation.answer, simulation.word_list)
+        # Use the same starting candidates for this game
+        if self.starting_candidates is None:
+            self.starting_candidates = random.sample(WORD_LIST, 10)
+        result = solver.solve(simulation.answer, simulation.word_list, starting_candidates=self.starting_candidates)
         
         if not result.success:
             messagebox.showinfo("Solver", "Solver failed to find the answer within the attempt limit.")
@@ -487,6 +494,10 @@ class WordleGUI:
             f"• Nodes generated: {result.generated_nodes}\n",
             f"• Max frontier size: {result.frontier_max}\n",
         ]
+        
+        if result.starting_candidates:
+            candidates_str = ", ".join(sorted(w.upper() for w in result.starting_candidates))
+            result_lines.append(f"• Starting candidates ({len(result.starting_candidates)}): {candidates_str}\n\n")
         
         if result.explored_words:
             result_lines.append(f"• Words explored: {len(result.explored_words)}\n\n")
