@@ -1,7 +1,7 @@
 # Wordle AI Project Report
 
 ## Overview
-This project implements a complete Wordle game with an interactive GUI and four classical search algorithms (BFS, DFS, UCS, A*) with **configurable cost and heuristic functions**. The implementation uses a dataset of 2,315 five-letter words and includes performance optimizations such as precomputed feedback tables with persistent caching. Users can select from **32 different solver configurations** combining various cost functions and heuristics.
+This project implements a complete Wordle game with an interactive GUI and four classical search algorithms (BFS, DFS, UCS, A*) with **configurable cost and heuristic functions**. The implementation uses a dataset of **14,855 five-letter words** and includes performance optimizations such as **sparse feedback tables with persistent caching** (max 200 connections per word). Users can select from **14 different solver configurations** combining various cost functions and admissible heuristics.
 
 ## Project Structure
 
@@ -9,7 +9,7 @@ This project implements a complete Wordle game with an interactive GUI and four 
 - **`wordle/game.py`**: Game logic and state management. Validates guesses, tracks game history, and provides feedback using the standard Wordle rules (green/yellow/gray).
 - **`wordle/feedback.py`**: Feedback evaluation system with the `Mark` enum (CORRECT, PRESENT, ABSENT) and color mapping.
 - **`wordle/knowledge.py`**: Constraint tracking system (`WordleKnowledge` class) that maintains known letter positions, excluded positions, min/max letter counts, and excluded letters.
-- **`wordle/words.py`**: Word list loader that reads 2,315 valid five-letter words from `valid_solutions.csv`.
+- **`wordle/words.py`**: Word list loader that reads 14,855 valid five-letter words from `valid_solutions.csv`.
 
 ### Search Solvers
 **`wordle/solver_optimized.py`**: Optimized graph-search implementations with shared feedback table and configurable cost/heuristic functions:
@@ -17,16 +17,18 @@ This project implements a complete Wordle game with an interactive GUI and four 
 #### Base Algorithms
 - **BFS**: Breadth-first search - explores states level by level, guarantees minimum guesses
 - **DFS**: Depth-first search - explores deeply before backtracking, memory efficient
-- **UCS**: Uniform cost search with **5 configurable cost functions**
-- **A***: A* search with **5 cost functions × 5 heuristic functions = 25 variants**
+- **UCS**: Uniform cost search with **4 configurable cost functions**
+- **A***: A* search with **4 cost functions × 2 heuristic functions = 8 variants**
 
 All solvers share a precomputed feedback table for O(1) feedback lookup instead of recomputing feedback for each candidate.
 
 ### Performance Optimization
-**`wordle/feedback_table.py`**: Implements persistent caching of feedback tables:
-- Precomputes all 2,315 × 2,315 = 5,359,225 feedback pairs
-- Caches to `.cache/` directory using pickle with MD5 hash-based versioning
+**`wordle/feedback_table.py`**: Implements persistent caching of feedback tables with **sparse graph optimization**:
+- Uses sparse graph: max 200 random connections per word (deterministic seed=42)
+- Caches ~3M pairs instead of 221M pairs (14,855 × 14,855) - **98.6% memory reduction**
+- Caches to `.cache/` directory using pickle with MD5 hash-based versioning (~180 MB)
 - First run: ~2-5 seconds to build, subsequent runs: <100ms to load
+- Fallback to on-the-fly computation for cache misses
 - Reduces memory usage through shared class-level storage
 
 ### User Interface
@@ -309,15 +311,15 @@ Consider searching for the word "WORLD":
 
 ```
 Initial: 14,855 candidates
-├─ Guess "SLATE" → 1,234 remain (expanded_nodes=1, generated_nodes=30, frontier_size=30)
-    ├─ Guess "CORNY" → 87 remain (expanded_nodes=2, generated_nodes=30+25=55, max_frontier=29)
-        ├─ Guess "WORLD" → 1 remain [FOUND!] (expanded_nodes=3, generated_nodes=55+20=75)
+├─ Guess "SLATE" → 1,234 remain (expanded_nodes=1, generated_nodes=10, frontier_size=10)
+    ├─ Guess "CORNY" → 87 remain (expanded_nodes=2, generated_nodes=10+8=18, max_frontier=9)
+        ├─ Guess "WORLD" → 1 remain [FOUND!] (expanded_nodes=3, generated_nodes=18+6=24)
 ```
 
 **Final metrics**:
 - Nodes expanded: 3 (processed 3 states)
-- Nodes generated: 75 (created 75 child states total)
-- Max frontier size: 30 (peak at initial state)
+- Nodes generated: 24 (created 24 child states total)
+- Max frontier size: 10 (peak at initial state)
 - Words explored: ~50 (unique words across all guesses)
 
 ### Interpreting Results

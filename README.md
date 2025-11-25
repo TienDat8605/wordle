@@ -9,7 +9,7 @@ Python implementation of Wordle featuring an interactive GUI, AI solvers with **
 - **Configurable search strategies**: Choose different cost functions (constant, candidate reduction, partition balance, entropy) and admissible heuristics (log2, partition)
 - Search-based AI solvers with on-screen animation of their decision process
 - Benchmark harness measuring solver latency, memory usage (via `tracemalloc`), and node expansion counts
-- **Sparse feedback table caching**: Optimized memory usage with max 100 connections per word (~1.5M pairs instead of 221M)
+- **Sparse feedback table caching**: Optimized memory usage with max 200 connections per word (~3M pairs instead of 221M)
 - Extensible code structure for experimenting with additional heuristics or word lists
 
 ## Quick Start
@@ -32,9 +32,9 @@ python -m wordle
 
 **Note**: 
 - First run automatically builds sparse feedback cache (~2-5 seconds for 14,855 words)
-- Uses sparse graph optimization: max 100 connections per word to prevent OOM
+- Uses sparse graph optimization: max 200 connections per word to prevent OOM
 - Subsequent runs load from cache instantly (<100ms)
-- Cache stored in `.cache/` directory (~113 MB)
+- Cache stored in `.cache/` directory (~180 MB)
 
 ## Usage
 
@@ -140,7 +140,7 @@ Wordle/
 │   ├── gui.py            # Tkinter UI
 │   ├── solver_optimized.py  # Search algorithms (26 configs)
 │   ├── feedback.py       # Feedback evaluation
-│   ├── feedback_table.py # Sparse feedback cache (max 100 connections/word)
+│   ├── feedback_table.py # Sparse feedback cache (max 200 connections/word)
 │   ├── knowledge.py      # Constraint tracking
 │   ├── words.py          # 14,855-word dataset loader
 │   └── benchmark.py      # Performance testing
@@ -157,13 +157,13 @@ Wordle/
 ## Technical Highlights
 
 - **14 Solver Configurations**: Combine 4 cost functions with 2 admissible heuristics for experimentation
-- **Sparse Feedback Table**: ~1.5M pairs cached (99.3% memory reduction vs full table)
-  - Max 100 random connections per word (sparse graph optimization)
+- **Sparse Feedback Table**: ~3M pairs cached (98.6% memory reduction vs full table)
+  - Max 200 random connections per word (sparse graph optimization)
   - Prevents OOM on 14,855-word dataset (would be 221M pairs otherwise)
   - Fallback to on-the-fly computation for cache misses
 - **Efficient State Representation**: Immutable frozen dataclass for O(1) hashing
 - **Constraint Propagation**: Incremental filtering reduces search space
-- **Branching Limiting**: Max 30 candidates per state prevents blowup
+- **Branching Limiting**: Max 10 starting candidates per game prevents initial blowup
 
 For detailed algorithm analysis, cost/heuristic explanations, and implementation details, see **REPORT.md**.
 
