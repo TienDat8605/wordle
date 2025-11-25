@@ -8,3 +8,6 @@ build/
 dist/
 *.pkl
 *.spec
+build_executable.sh
+build_executable.bat
+valid_solutions_old.csv
