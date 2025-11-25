@@ -12,3 +12,4 @@ build_executable.sh
 build_executable.bat
 valid_solutions_old.csv
 estimate_cache_performance.py
+.vscode/
