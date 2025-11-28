@@ -3,14 +3,16 @@
 Python implementation of Wordle featuring an interactive GUI, AI solvers with **configurable cost and heuristic functions**, visual animations, and comprehensive benchmarking utilities.
 
 ## Features
-- Classic Wordle gameplay with a Tkinter GUI and comprehensive 14,855-word dictionary
-- Direct cell input with keyboard navigation (type, backspace across cells, Enter to submit)
-- **14 AI solver configurations**: BFS, DFS, UCS (4 cost functions), A* (4 cost × 2 heuristic = 8 variants)
-- **Configurable search strategies**: Choose different cost functions (constant, candidate reduction, partition balance, entropy) and admissible heuristics (log2, partition)
-- Search-based AI solvers with on-screen animation of their decision process
-- Benchmark harness measuring solver latency, memory usage (via `tracemalloc`), and node expansion counts
-- **Sparse feedback table caching**: Optimized memory usage with max 200 connections per word (~3M pairs instead of 221M)
-- Extensible code structure for experimenting with additional heuristics or word lists
+- **Classic Wordle Gameplay**: Interactive Tkinter GUI with a comprehensive 14,855-word dictionary.
+- **Advanced AI Solvers**: 14 configurations including BFS, DFS, UCS, and A* with customizable cost and heuristic functions.
+- **Optimized Performance**:
+  - **Sparse Feedback Table**: Uses a sparse graph (max 200 connections/word) to cache feedback, reducing memory by ~98.6% (from 221M to ~3M entries) while maintaining O(1) lookup speed.
+  - **Compact State Representation**: Efficient hashing and state tracking to minimize memory footprint during search.
+  - **Branching Factor Control**: Limits search exploration to the most promising candidates to prevent combinatorial explosion.
+- **Configurable Search Strategies**:
+  - **Cost Functions**: Constant, Candidate Reduction, Partition Balance, Entropy.
+  - **Heuristics**: Log2 (Admissible), Partition Size (Admissible).
+- **Benchmarking Tool**: Measure solver latency, memory usage, and node expansion counts.
 
 ## Quick Start
 
@@ -31,26 +33,26 @@ python -m wordle
 ```
 
 **Note**: 
-- First run automatically builds sparse feedback cache (~2-5 seconds for 14,855 words)
-- Uses sparse graph optimization: max 200 connections per word to prevent OOM
-- Subsequent runs load from cache instantly (<100ms)
-- Cache stored in `.cache/` directory (~180 MB)
+- First run automatically builds sparse feedback cache (~2-5 seconds for 14,855 words).
+- Uses sparse graph optimization: max 200 connections per word to prevent OOM.
+- Subsequent runs load from cache instantly (<100ms).
+- Cache stored in `.cache/` directory (~180 MB).
 
 ## Usage
 
 ### Playing the Game
-1. **Manual Play**: Type letters directly into the grid cells
-   - Letters auto-advance to next cell
-   - Backspace deletes current cell or moves back
-   - Press Enter to submit when row is complete
+1. **Manual Play**: Type letters directly into the grid cells.
+   - Letters auto-advance to next cell.
+   - Backspace deletes current cell or moves back.
+   - Press Enter to submit when row is complete.
    
-2. **AI Solver**: Select a solver (BFS/DFS/UCS/A*) and click **Run Solver** to watch it solve
-   - Animated step-by-step solution (750ms per guess)
-   - Shows the solver's decision-making process
+2. **AI Solver**: Select a solver (BFS/DFS/UCS/A*) and click **Run Solver** to watch it solve.
+   - Animated step-by-step solution (750ms per guess).
+   - Shows the solver's decision-making process.
    
-3. **Benchmark**: Click **Benchmark** to test all solvers
-   - Configure number of samples and random seed
-   - View performance metrics in the results panel
+3. **Benchmark**: Click **Benchmark** to test all solvers.
+   - Configure number of samples and random seed.
+   - View performance metrics in the results panel.
 
 ### Running Benchmarks via CLI
 ```bash
@@ -64,10 +66,10 @@ python run_benchmarks.py
 ## Solvers
 
 ### Core Algorithms
-- **BFS** – Breadth-first search: explores states level by level, guarantees minimum guesses
-- **DFS** – Depth-first search: memory efficient, explores deeply before backtracking  
-- **UCS** – Uniform cost search with **4 configurable cost functions**
-- **A*** – A* search with **4 cost functions × 5 heuristic functions = 20 variants**
+- **BFS** – Breadth-first search: explores states level by level, guarantees minimum guesses.
+- **DFS** – Depth-first search: memory efficient, explores deeply before backtracking.
+- **UCS** – Uniform cost search with **4 configurable cost functions**.
+- **A*** – A* search with **4 cost functions × 2 heuristic functions = 8 variants**.
 
 ### Cost Functions (UCS and A*)
 Cost functions determine **g(n)** – the accumulated cost to reach state n. Lower cost = better guess path.
@@ -98,73 +100,15 @@ Only **admissible heuristics** are included to guarantee optimal solutions.
 
 **Admissibility**: A heuristic is admissible if $h(n) \leq h^*(n)$ (never overestimates true cost). Admissible heuristics guarantee optimal solutions in A*.
 
-*See REPORT.md for detailed mathematical derivations and performance comparisons.*
-
-## Benchmark Results *(samples=10, seed=42)*
-
-### Default Solvers (constant cost, ratio heuristic)
-
-| Solver | Success | Avg Time (ms) | Max Time (ms) | Avg Memory (KB) | Max Memory (KB) | Avg Nodes |
-|--------|---------|---------------|---------------|-----------------|-----------------|-----------|
-| **BFS** | 100% | 2258.27 | 18927.55 | 185240.96 | 1828805.23 | 124.3 |
-| **DFS** | 100% | 61.38 | 65.36 | 597.49 | 802.07 | 5.3 |
-| **UCS-constant** | 100% | 415.42 | 1676.13 | 2871.36 | 8204.15 | 124.3 |
-| **A*-constant-ratio** | 100% | 57.56 | 59.71 | 597.49 | 802.07 | 4.0 |
-
-### Recommended Configurations (single word test)
-
-Test on "WORLD":
-
-| Solver | Guesses | Nodes Explored | Improvement |
-|--------|---------|----------------|-------------|
-| `bfs-opt` | 2 | 247 | Baseline |
-| `ucs-reduction` | 2 | 73 | 70% fewer nodes |
-| `astar-constant-log2` | 2 | 3 | **99% fewer nodes!** |
-| `astar-reduction-log2` | 2 | 3 | **99% fewer nodes!** |
-
-**Key Findings:**
-- A* is 39× faster than BFS with 310× less memory usage
-- **log2 heuristic** is dramatically more efficient (247 → 3 nodes)
-- **reduction cost** improves search by 70%
-- All solvers achieve 100% success rate within 6 guesses
-- DFS is surprisingly effective due to constraint propagation
-
-Run `python run_benchmarks.py --samples 10 --seed 42` to regenerate these metrics.
-
-## Project Structure
-
-```
-Wordle/
-├── wordle/               # Main package
-│   ├── game.py           # Core game logic
-│   ├── gui.py            # Tkinter UI
-│   ├── solver_optimized.py  # Search algorithms (26 configs)
-│   ├── feedback.py       # Feedback evaluation
-│   ├── feedback_table.py # Sparse feedback cache (max 200 connections/word)
-│   ├── knowledge.py      # Constraint tracking
-│   ├── words.py          # 14,855-word dataset loader
-│   └── benchmark.py      # Performance testing
-├── valid_solutions.csv   # 14,855 five-letter words
-├── run_game.py           # Game launcher
-├── run_cache.py          # Precompute feedback cache
-├── run_benchmarks.py     # CLI benchmarking
-├── build_executable.sh   # Linux/Mac build script
-├── build_executable.bat  # Windows build script
-├── README.md             # This file
-└── REPORT.md             # Detailed analysis
-```
-
 ## Technical Highlights
 
-- **14 Solver Configurations**: Combine 4 cost functions with 2 admissible heuristics for experimentation
-- **Sparse Feedback Table**: ~3M pairs cached (98.6% memory reduction vs full table)
-  - Max 200 random connections per word (sparse graph optimization)
-  - Prevents OOM on 14,855-word dataset (would be 221M pairs otherwise)
-  - Fallback to on-the-fly computation for cache misses
-- **Efficient State Representation**: Immutable frozen dataclass for O(1) hashing
-- **Constraint Propagation**: Incremental filtering reduces search space
-- **Branching Limiting**: Max 10 starting candidates per game prevents initial blowup
+- **14 Solver Configurations**: Combine 4 cost functions with 2 admissible heuristics.
+- **Sparse Feedback Table**: ~3M pairs cached (98.6% memory reduction vs full table).
+  - Max 200 random connections per word (sparse graph optimization).
+  - Prevents OOM on 14,855-word dataset.
+  - Fallback to on-the-fly computation for cache misses.
+- **Efficient State Representation**: Immutable frozen dataclass for O(1) hashing.
+- **Constraint Propagation**: Incremental filtering reduces search space.
+- **Branching Limiting**: Max 10 starting candidates per game prevents initial blowup.
 
 For detailed algorithm analysis, cost/heuristic explanations, and implementation details, see **REPORT.md**.
-
-See `REPORT.md` for detailed algorithm analysis and implementation notes.
