@@ -27,8 +27,8 @@ class WordleGUI:
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("Wordle AI Studio")
-        self.root.geometry("900x950")  # Initial size (larger for more controls)
-        self.root.minsize(800, 900)  # Minimum size
+        self.root.geometry("1000x1100")  # Initial size (larger for better visibility)
+        self.root.minsize(900, 1000)  # Minimum size
         self.root.resizable(True, True)
 
         self.game = WordleGame()
@@ -66,19 +66,19 @@ class WordleGUI:
         grid_container = tk.Frame(board_frame, bg="white")
         grid_container.grid(row=0, column=0)
 
-        # Create 6x5 grid of Entry widgets (bigger blocks with 36pt font)
+        # Create 6x5 grid of Entry widgets (optimized blocks with 40pt font)
         for row in range(6):
             row_entries = []
             for col in range(5):
                 entry = tk.Entry(
                     grid_container,
                     width=2,
-                    font=("Helvetica", 36, "bold"),
+                    font=("Arial", 40, "bold"),
                     justify="center",
                     bg="white",
-                    fg="black",
+                    fg="#1a1a1a",
                     disabledbackground="white",
-                    disabledforeground="black",
+                    disabledforeground="#1a1a1a",
                     relief="solid",
                     borderwidth=2,
                     highlightthickness=0,
@@ -97,12 +97,12 @@ class WordleGUI:
         status_label = tk.Label(
             self.root,
             textvariable=self.status_var,
-            font=("Helvetica", 14, "bold"),
+            font=("Arial", 16, "bold"),
             bg="#f8f9fa",
-            fg="#333",
-            pady=10,
+            fg="#1a1a1a",
+            pady=12,
         )
-        status_label.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+        status_label.grid(row=1, column=0, sticky="ew", padx=20, pady=(10, 10))
 
         # ==== Controls ====
         controls_frame = tk.Frame(self.root, bg="#f8f9fa")
@@ -113,9 +113,9 @@ class WordleGUI:
         tk.Label(
             controls_frame,
             text="Solver:",
-            font=("Helvetica", 12),
+            font=("Arial", 13, "bold"),
             bg="#f8f9fa",
-        ).grid(row=0, column=0, padx=5, sticky="e")
+        ).grid(row=0, column=0, padx=8, sticky="e")
 
         self.solver_menu = tk.OptionMenu(
             controls_frame,
@@ -123,81 +123,81 @@ class WordleGUI:
             *self.SOLVER_DISPLAY_NAMES.keys(),
             command=self._update_controls_visibility,
         )
-        self.solver_menu.config(font=("Helvetica", 11), width=8)
-        self.solver_menu.grid(row=0, column=1, padx=5, sticky="w")
+        self.solver_menu.config(font=("Arial", 12), width=10)
+        self.solver_menu.grid(row=0, column=1, padx=8, sticky="w")
 
         # Row 1: Cost function (for UCS and A*)
         self.cost_label = tk.Label(
             controls_frame,
             text="Cost Fn:",
-            font=("Helvetica", 12),
+            font=("Arial", 13, "bold"),
             bg="#f8f9fa",
         )
-        self.cost_label.grid(row=1, column=0, padx=5, sticky="e")
+        self.cost_label.grid(row=1, column=0, padx=8, sticky="e")
 
         self.cost_menu = tk.OptionMenu(
             controls_frame,
             self.cost_var,
             *COST_FUNCTIONS.keys(),
         )
-        self.cost_menu.config(font=("Helvetica", 10), width=12)
-        self.cost_menu.grid(row=1, column=1, padx=5, sticky="w")
+        self.cost_menu.config(font=("Arial", 12), width=14)
+        self.cost_menu.grid(row=1, column=1, padx=8, sticky="w")
 
         # Row 2: Heuristic function (for A* only)
         self.heuristic_label = tk.Label(
             controls_frame,
             text="Heuristic:",
-            font=("Helvetica", 12),
+            font=("Arial", 13, "bold"),
             bg="#f8f9fa",
         )
-        self.heuristic_label.grid(row=2, column=0, padx=5, sticky="e")
+        self.heuristic_label.grid(row=2, column=0, padx=8, sticky="e")
 
         self.heuristic_menu = tk.OptionMenu(
             controls_frame,
             self.heuristic_var,
             *HEURISTIC_FUNCTIONS.keys(),
         )
-        self.heuristic_menu.config(font=("Helvetica", 10), width=12)
-        self.heuristic_menu.grid(row=2, column=1, padx=5, sticky="w")
+        self.heuristic_menu.config(font=("Arial", 12), width=14)
+        self.heuristic_menu.grid(row=2, column=1, padx=8, sticky="w")
 
         # Run Solver button
         run_solver_btn = tk.Button(
             controls_frame,
             text="Run Solver",
             command=self.run_solver,
-            font=("Helvetica", 12, "bold"),
+            font=("Arial", 13, "bold"),
             bg="#4CAF50",
             fg="white",
-            padx=15,
-            pady=5,
+            padx=18,
+            pady=8,
             relief="raised",
         )
-        run_solver_btn.grid(row=0, column=2, padx=5, rowspan=3)
+        run_solver_btn.grid(row=0, column=2, padx=8, rowspan=3)
 
         # New Game button
         new_game_btn = tk.Button(
             controls_frame,
             text="New Game",
             command=self.new_game,
-            font=("Helvetica", 12, "bold"),
+            font=("Arial", 13, "bold"),
             bg="#2196F3",
             fg="white",
-            padx=15,
-            pady=5,
+            padx=18,
+            pady=8,
             relief="raised",
         )
-        new_game_btn.grid(row=0, column=3, padx=5, rowspan=3)
+        new_game_btn.grid(row=0, column=3, padx=8, rowspan=3)
 
         # Benchmark button
         benchmark_btn = tk.Button(
             controls_frame,
             text="Benchmark",
             command=self.show_benchmark_dialog,
-            font=("Helvetica", 12, "bold"),
+            font=("Arial", 13, "bold"),
             bg="#FF9800",
             fg="white",
-            padx=15,
-            pady=5,
+            padx=18,
+            pady=8,
             relief="raised",
         )
         benchmark_btn.grid(row=0, column=4, padx=5, rowspan=3)
@@ -562,23 +562,23 @@ class WordleGUI:
         dialog.geometry(f"+{x}+{y}")
         
         # Samples input
-        tk.Label(dialog, text="Number of samples:", font=("Helvetica", 11)).grid(
+        tk.Label(dialog, text="Number of samples:", font=("Arial", 12)).grid(
             row=0, column=0, padx=20, pady=10, sticky="e"
         )
         samples_var = tk.StringVar(value="3")
-        samples_entry = tk.Entry(dialog, textvariable=samples_var, font=("Helvetica", 11), width=10)
+        samples_entry = tk.Entry(dialog, textvariable=samples_var, font=("Arial", 12), width=10)
         samples_entry.grid(row=0, column=1, padx=10, pady=10, sticky="w")
         
         # Seed input
-        tk.Label(dialog, text="Random seed:", font=("Helvetica", 11)).grid(
+        tk.Label(dialog, text="Random seed:", font=("Arial", 12)).grid(
             row=1, column=0, padx=20, pady=10, sticky="e"
         )
         seed_var = tk.StringVar(value="7")
-        seed_entry = tk.Entry(dialog, textvariable=seed_var, font=("Helvetica", 11), width=10)
+        seed_entry = tk.Entry(dialog, textvariable=seed_var, font=("Arial", 12), width=10)
         seed_entry.grid(row=1, column=1, padx=10, pady=10, sticky="w")
         
         # Solver selection section
-        tk.Label(dialog, text="Select Solvers:", font=("Helvetica", 11, "bold")).grid(
+        tk.Label(dialog, text="Select Solvers:", font=("Arial", 12, "bold")).grid(
             row=2, column=0, columnspan=2, padx=20, pady=(15, 5), sticky="w"
         )
         
@@ -596,46 +596,46 @@ class WordleGUI:
         for i, (key, name, default) in enumerate(basic_solvers):
             var = tk.BooleanVar(value=default)
             solver_vars[key] = var
-            cb = tk.Checkbutton(solver_frame, text=name, variable=var, font=("Helvetica", 10))
+            cb = tk.Checkbutton(solver_frame, text=name, variable=var, font=("Arial", 11))
             cb.grid(row=i // 2, column=i % 2, sticky="w", padx=10, pady=2)
         
         # UCS with cost selection
-        tk.Label(solver_frame, text="UCS:", font=("Helvetica", 10)).grid(
+        tk.Label(solver_frame, text="UCS:", font=("Arial", 11)).grid(
             row=1, column=0, sticky="w", padx=10, pady=2
         )
         ucs_var = tk.BooleanVar(value=True)
-        ucs_cb = tk.Checkbutton(solver_frame, variable=ucs_var, font=("Helvetica", 10))
+        ucs_cb = tk.Checkbutton(solver_frame, variable=ucs_var, font=("Arial", 11))
         ucs_cb.grid(row=1, column=0, sticky="w", padx=80, pady=2)
         
         ucs_cost_var = tk.StringVar(value="constant")
-        ucs_cost_menu = tk.OptionMenu(solver_frame, ucs_cost_var, "constant", "reduction", "partition", "entropy")
-        ucs_cost_menu.config(font=("Helvetica", 9), width=10)
+        ucs_cost_menu = tk.OptionMenu(solver_frame, ucs_cost_var, *list(COST_FUNCTIONS.keys()))
+        ucs_cost_menu.config(font=("Arial", 11), width=12)
         ucs_cost_menu.grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         # A* with cost and heuristic selection
-        tk.Label(solver_frame, text="A*:", font=("Helvetica", 10)).grid(
+        tk.Label(solver_frame, text="A*:", font=("Arial", 11)).grid(
             row=2, column=0, sticky="w", padx=10, pady=2
         )
         astar_var = tk.BooleanVar(value=True)
-        astar_cb = tk.Checkbutton(solver_frame, variable=astar_var, font=("Helvetica", 10))
+        astar_cb = tk.Checkbutton(solver_frame, variable=astar_var, font=("Arial", 11))
         astar_cb.grid(row=2, column=0, sticky="w", padx=80, pady=2)
         
         astar_cost_var = tk.StringVar(value="constant")
-        astar_cost_menu = tk.OptionMenu(solver_frame, astar_cost_var, "constant", "reduction", "partition", "entropy")
-        astar_cost_menu.config(font=("Helvetica", 9), width=10)
+        astar_cost_menu = tk.OptionMenu(solver_frame, astar_cost_var, *list(COST_FUNCTIONS.keys()))
+        astar_cost_menu.config(font=("Arial", 11), width=12)
         astar_cost_menu.grid(row=2, column=1, sticky="w", padx=5, pady=2)
         
-        tk.Label(solver_frame, text="h:", font=("Helvetica", 9)).grid(
+        tk.Label(solver_frame, text="h:", font=("Arial", 11)).grid(
             row=3, column=0, sticky="e", padx=85, pady=2
         )
         astar_h_var = tk.StringVar(value="log2")
-        astar_h_menu = tk.OptionMenu(solver_frame, astar_h_var, "ratio", "remaining", "log2", "entropy", "partition")
-        astar_h_menu.config(font=("Helvetica", 9), width=10)
+        astar_h_menu = tk.OptionMenu(solver_frame, astar_h_var, *list(HEURISTIC_FUNCTIONS.keys()))
+        astar_h_menu.config(font=("Arial", 11), width=12)
         astar_h_menu.grid(row=3, column=1, sticky="w", padx=5, pady=2)
         
         # Status label
         status_var = tk.StringVar(value="")
-        status_label = tk.Label(dialog, textvariable=status_var, font=("Helvetica", 10), fg="blue")
+        status_label = tk.Label(dialog, textvariable=status_var, font=("Arial", 11), fg="blue")
         status_label.grid(row=4, column=0, columnspan=2, pady=5)
         
         # Buttons
@@ -763,7 +763,7 @@ class WordleGUI:
             button_frame,
             text="Run",
             command=run_benchmark,
-            font=("Helvetica", 11),
+            font=("Arial", 12),
             padx=20,
         )
         run_btn.grid(row=0, column=0, padx=5)
@@ -772,7 +772,7 @@ class WordleGUI:
             button_frame,
             text="Cancel",
             command=dialog.destroy,
-            font=("Helvetica", 11),
+            font=("Arial", 12),
             padx=20,
         )
         cancel_btn.grid(row=0, column=1, padx=5)
