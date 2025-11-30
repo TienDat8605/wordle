@@ -78,8 +78,6 @@ Cost functions determine **g(n)** – the accumulated cost to reach state n. Low
 |----------|---------------------|-------------|----------|
 | **constant** | $c(s) = 1$ | Every guess costs the same | Baseline (UCS = BFS) |
 | **reduction** | $c(s) = 1 + \frac{\|C_{after}\|}{\|C_{before}\|}$ | Rewards candidate elimination | **RECOMMENDED** |
-| **partition** | $c(s) = 1 + \frac{\max(\|P_i\|)}{\|C_{before}\|}$ | Penalizes large partitions | Avoids worst-case |
-| **entropy** | $c(s) = 2 - \frac{H(X)}{H_{max}}$ | High entropy = cheap | Information theory |
 
 Where:
 - $\|C_{before}\|$ = number of candidates before guess
@@ -96,13 +94,12 @@ Only **admissible heuristics** are included to guarantee optimal solutions.
 | Function | Mathematical Formula | Admissible? | Description |
 |----------|---------------------|-------------|-------------|
 | **log2** | $h(n) = \log_2(\|C_{remaining}\|)$ | Yes | Minimum binary splits needed. **RECOMMENDED** |
-| **partition** | $h(n) = \log_2(\max(\|P_i\|))$ | Yes | Worst-case partition size |
 
 **Admissibility**: A heuristic is admissible if $h(n) \leq h^*(n)$ (never overestimates true cost). Admissible heuristics guarantee optimal solutions in A*.
 
 ## Technical Highlights
 
-- **14 Solver Configurations**: Combine 4 cost functions with 2 admissible heuristics.
+- **4 Solver Configurations**: Combine 2 cost functions with 1 admissible heuristic (plus BFS/DFS).
 - **Sparse Feedback Table**: ~3M pairs cached (98.6% memory reduction vs full table).
   - Max 200 random connections per word (sparse graph optimization).
   - Prevents OOM on 14,855-word dataset.

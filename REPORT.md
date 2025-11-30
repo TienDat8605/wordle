@@ -67,8 +67,6 @@ The cost function $c(s, a)$ defines the "price" of making a guess.
 | :--- | :--- | :--- |
 | **Constant** | $c = 1$ | Standard shortest path. Every guess has equal weight. |
 | **Reduction** | $c = 1 + \frac{\|C_{after}\|}{\|C_{before}\|}$ | **Greedy-like**. Cheaper to make guesses that eliminate many candidates. |
-| **Partition** | $c = 1 + \frac{\max(\|P_i\|)}{\|C_{before}\|}$ | **Worst-case avoidance**. Penalizes guesses that result in large remaining partitions (buckets). |
-| **Entropy** | $c = 2 - \frac{H(X)}{H_{max}}$ | **Information Theoretic**. Cheaper to make guesses that provide high information gain (bits). |
 
 ### 4.3 Heuristic Functions (for A*)
 The heuristic $h(n)$ estimates the remaining cost to the goal. For A* to be optimal, $h(n)$ must be **admissible** (never overestimate).
@@ -78,10 +76,7 @@ The heuristic $h(n)$ estimates the remaining cost to the goal. For A* to be opti
     *   **Logic**: In the best case (binary search), each guess halves the search space. You need *at least* $\log_2(N)$ bits of information to distinguish $N$ items. Thus, you need at least $\log_2(N)$ guesses.
     *   **Status**: **Recommended**. It is a tight lower bound.
 
-2.  **Partition Heuristic (Admissible)**:
-    *   $h(n) = \log_2(\max(\|P_i\|))$
-    *   **Logic**: Even if you pick the best guess, you might get the "worst" feedback (largest partition). You will still need to distinguish the items in that largest partition.
-    *   **Status**: Also admissible, sometimes tighter than simple Log2.
+
 
 ## 5. Key Classes Deep Dive
 
