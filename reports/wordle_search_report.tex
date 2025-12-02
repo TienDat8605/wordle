@@ -1,0 +1,218 @@
+% Wordle Search Algorithms Report
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{siunitx}
+\usepackage{graphicx}
+\geometry{margin=1in}
+\title{Search Algorithms Applied to Wordle: BFS, DFS, UCS and A*}
+\author{Repository: TienDat8605/wordle}
+\date{\today}
+
+\begin{document}
+
+\begin{abstract}
+This report analyzes search algorithms applied to the Wordle puzzle using the
+implementation in the provided repository. We compare breadth-first search
+(BFS), depth-first search (DFS), uniform-cost search (UCS) with different
+cost functions, and A* with admissible heuristics. Experimental metrics
+include elapsed time, peak Python memory (tracemalloc), nodes expanded, and
+the average number of guesses required to solve sampled answers.
+\end{abstract}
+
+\section{Introduction}
+This document presents an empirical study of classical search algorithms when
+applied to the Wordle solving problem implemented in this repository. The goal
+is to understand trade-offs between search time, memory usage, node
+expansion, and solution quality (number of guesses). We extend the project's
+benchmarking with an additional metric: the average number of guesses per
+game, reported alongside performance measurements.
+
+\section{Problem Formulation}
+We model Wordle as a deterministic single-agent search problem where a state
+represents the solver's \textit{knowledge} about possible answers (the set of
+remaining candidate words and the history of guesses with feedback). Formally:
+
+\begin{description}
+	\item[States:] Compact encodings of the remaining candidate indices and the
+		feedback history (the codebase uses \texttt{CompactState} and related
+		knowledge structures to represent states).
+
+	\item[Actions:] Selecting a guess from a permitted candidate set. The
+	implementation often restricts the root-level candidate set via
+		exttt{starting\_candidates} and limits branching at each node using
+		exttt{max\_branching} for tractability.
+
+	\item[Transition:] Applying a guess produces deterministic feedback
+		(green/yellow/gray) that filters the candidate set to form the next state.
+		Transitions are computed using the project's \texttt{FeedbackTable}, which
+		provides cached (sparse) lookups and falls back to on-the-fly feedback
+		computation when necessary.
+
+	\item[Goal test:] A state whose remaining candidate set contains only the
+		secret answer (i.e., the solver has identified the target word).
+
+	\item[Cost:] Algorithm-dependent. For BFS-like behavior a constant step cost
+		is used; UCS variants experiment with information-driven costs (e.g.
+		penalizing large remaining sets, rewarding high-information guesses, or
+		using entropy-like measures).
+\end{description}
+
+
+The search graph is implicit and potentially large: nodes are distinct
+knowledge states rather than concrete word sequences. Practical limits such as
+	exttt{max\_branching} and restricted starting candidate sets are applied to keep
+search tractable on commodity hardware.
+
+% Figure moved to Experimental Results for coherence with the main table
+\subsection{BFS}
+Breadth-first search (BFS) expands nodes in order of increasing depth (number of
+guesses from the root). In the Wordle formulation used here, each node is a
+knowledge state and BFS therefore finds solutions with the minimum number of
+guesses when the full branching is allowed. Practically, BFS keeps the entire
+frontier for a given depth in memory which can lead to large peak Python
+allocations when many candidate partitions are considered. The repository's
+	exttt{OptimizedBFS} implementation uses compact state encodings and candidate
+filtering to reduce memory pressure, and the search is constrained by
+	exttt{starting\_candidates} and \texttt{max\_branching} at each node for tractability.
+
+\subsection{DFS}
+Depth-first search (DFS) explores states by following a path as deep as
+possible before backtracking. It uses much less memory than BFS because only
+the current path and a small ancillary stack are retained. In Wordle this
+typically results in longer guess sequences (worse solution quality) because
+DFS does not prioritize short solutions. The repository's `OptimizedDFS`
+variant applies the same compact state representation and candidate filtering
+optimizations; its low memory usage makes it useful as a baseline where
+resource constraints are strict.
+
+\subsection{UCS}
+Uniform-cost search (UCS) orders node expansion by accumulated path cost and
+uses the configured cost function to prefer cheaper paths. In this project UCS
+is used with several cost functions that attempt to capture information gain
+from guesses (see Section~4.2). When the cost is constant, UCS reduces to
+BFS in behavior. With information-aware costs (e.g. \texttt{reduction} or
+	exttt{entropy}) UCS can bias the search toward histories that reduce the
+candidate set faster, often lowering the number of expanded nodes at the cost
+of exploring deeper but cheaper paths.
+
+UCS orders node expansion by the accumulated path cost according to the configured cost function. Different cost functions change the search preference:
+\begin{itemize}
+	\item \texttt{constant}: each step costs 1, so UCS behaves like BFS and finds solutions with minimal guess count.
+	\item \texttt{reduction}: step cost is increased by the relative size of the remaining candidate set (e.g. \(1 + \frac{after}{before}\)), rewarding guesses that reduce candidates aggressively.
+	\item \texttt{partition}: penalizes guesses whose feedback induces a large largest-partition, so balanced splits are preferred.
+	\item \texttt{entropy}: inversely related to partition entropy, rewarding high-information guesses.
+\end{itemize}
+In the Wordle solver each guess's feedback is looked up from the \texttt{FeedbackTable} and candidate indices are filtered efficiently. UCS will therefore prioritize histories that minimize the chosen information cost and can reduce the number of expanded nodes compared to BFS when the cost function successfully captures information gain.
+
+\subsection{A*}
+A* in the repository uses priority \(f(n)=g(n)+h(n)\) where \(g(n)\) is computed with the same configurable cost functions and \(h(n)\) is an admissible heuristic. Available heuristics include \texttt{log2(remaining)} and a partition-based log2 heuristic. The \texttt{log2(remaining)} heuristic estimates the minimum number of binary splits required to isolate a single candidate and is admissible.
+
+\paragraph{Detailed behavior in Wordle}
+A* uses an admissible heuristic to estimate the remaining number of guesses needed from a state. The \texttt{log2(remaining)} heuristic treats the remaining candidate set size as if each guess could ideally halve the set; though ideal splits are rare, this heuristic never overestimates and therefore preserves admissibility. Combined with a chosen \(g(n)\) cost, A* ranks states by \(f(n)=g(n)+h(n)\), favoring paths that are inexpensive so far and promising to finish quickly. In practice, this reduces the number of expanded nodes dramatically compared to uninformed search because the candidate count is a strong indicator of how close a state is to a solution.
+
+Note the implementation's branching limit (\texttt{max\_branching}) and the restricted \texttt{starting\_candidates} mean the search is efficient but no longer a fully exhaustive A* over the original full search space — the limits trade strict optimality for tractability on the full word set.
+
+\section{Experiment Methodology}
+\subsection{Setup}
+All experiments were run from the repository root using the code's benchmark harness. The detailed benchmark script (added to the repository at \texttt{scripts/detailed\_benchmark.py}) runs the selected solvers on a reproducible set of answers drawn with a fixed seed. Each answer uses the same randomly selected set of 30 starting candidates across solvers to make comparisons fair.
+
+Commands to reproduce the experiments on PowerShell (run from repository root):
+\begin{verbatim}
+$env:PYTHONPATH = (Get-Location).Path; python .\run_benchmarks.py
+$env:PYTHONPATH = (Get-Location).Path; python .\scripts\detailed_benchmark.py
+\end{verbatim}
+
+Notes:
+- The first run may build a sparse feedback table and cache it to the project's \texttt{.cache} directory. This may take time and memory but subsequent runs will reuse the cache.
+-- Benchmarks in this report use 50 sample words with seed=23125033. The script measures elapsed time (ms), peak memory (tracemalloc, KiB), nodes expanded, and average guesses.
+
+\subsection{Sparse Feedback Table}
+The implementation uses a sparse feedback table to avoid storing the full
+S\^2 feedback graph (which would be prohibitively large for the full
+vocabulary). The table stores at most a limited number of feedback edges per
+word (the code uses `max_connections=200` by default) and serializes the
+structure to a cache file in the project's `\.cache` directory. Key behaviors
+are:
+\begin{itemize}
+	\item \textbf{Sparse storage:} Reduces memory from many gigabytes to a few
+		hundred megabytes by caching a representative subset of feedback edges per
+		word instead of all S\^2 pairs.
+	\item \textbf{Deterministic sampling:} The sparse edges are chosen
+		deterministically (seeded) so benchmark runs are reproducible and caches
+		are stable when the word list is unchanged.
+	\item \textbf{Lazy fallback:} If a requested feedback pair is missing from
+		the sparse cache, the system computes the feedback on-the-fly and uses it
+		(correctness preserved, at the cost of extra CPU time for that pair).
+	\item \textbf{Cache reuse:} The table is serialized (pickle) and loaded on
+		subsequent runs; logs show messages like ``Loaded N entries from cache''
+		when the cached file is found.
+\end{itemize}
+
+\subsection{Measured Solvers}
+The following solver configurations are reported here (as present in the code's solver registry): \texttt{bfs-opt}, \texttt{dfs-opt}, \texttt{ucs-constant}, and \texttt{astar-constant-log2}.
+
+\section{Experimental Results}
+All solvers succeeded on the sampled answers (success rate 100\%). Aggregated results are shown in Table~\ref{tab:bench-summary} and Figure~\ref{fig:bench-summary} (50-sample, seed=23125033). The metrics reported include elapsed time (ms), peak Python memory (KiB), nodes expanded, and average guesses.
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+	\begin{tabular}{lrrrrrrr}
+			oprule
+		Solver & Success & Avg time (ms) & Max time (ms) & Avg peak (KiB) & Max peak (KiB) & Avg nodes & Avg guesses \\
+		\midrule
+		BFS-OPT & 100\% & 23059.92 & 67834.27 & 20791.27 & 88610.74 & 286.9 & 2.10 \\
+		DFS-OPT & 100\% & 3547.47 & 5201.57 & 4296.15 & 6086.05 & 6.4 & 5.06 \\
+		UCS-REDUCTION & 100\% & 17672.54 & 68073.13 & 36835.19 & 1131704.92 & 154.6 & 2.10 \\
+		ASTAR-REDUCTION-LOG2 & 100\% & 3278.62 & 3910.30 & 4279.57 & 5577.19 & 4.1 & 2.12 \\
+		\bottomrule
+	\end{tabular}%
+}
+\caption{Aggregated benchmark metrics (50-sample, seed=23125033).}
+\label{tab:bench-summary}
+\end{table}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{images/bench_summary.png}
+  \caption{Benchmark summary: average time, peak memory, nodes expanded and guesses (50-sample, seed=23125033).}
+  \label{fig:bench-summary}
+\end{figure}
+
+\section{Analysis and Discussion}
+\begin{itemize}
+\item \textbf{A* (constant cost, log2 heuristic)}: Achieves the best balance of low expanded nodes and low memory usage. The admissible \texttt{log2(remaining)} heuristic is well matched to Wordle because candidate reduction behaves similarly to repeated partitioning. Quantitatively, A* reached an average of \textbf{2.12} guesses per game, expanded only \textbf{4.0} nodes on average, and used ~\textbf{4.3 MiB} average peak (4279.57 KiB) on the 50-sample run.
+\item \textbf{DFS}: Uses very little memory and expands few nodes overall but does not find shortest solutions in terms of guesses. DFS averaged \textbf{5.06} guesses per game and expanded \textbf{6.4} nodes on average; its average peak memory was ~\textbf{4.2 MiB} (4296.15 KiB). DFS is attractive when memory is constrained but yields higher guess counts.
+\item \textbf{BFS and UCS (constant cost)}: Both expand many nodes and consume large amounts of memory because many frontier states are kept simultaneously. With constant step cost UCS behaves like BFS; both averaged ~\textbf{286.9} expanded nodes and ~\textbf{2.10} guesses per game, but BFS's average peak memory was much larger (~41.8 MiB / 42764.90 KiB) due to frontier size. UCS's measured average peak was ~20.6 MiB (21063.26 KiB) in the sampled run.
+\item \textbf{Effect of root candidates and branching limits}: The reported average guesses are influenced by the choice of the 30 starting candidates at the root and the \texttt{max\_branching} limit used during search. A strong first-guess set can reduce average guesses dramatically; conversely a tight branching limit reduces memory but may sacrifice optimality.
+\end{itemize}
+
+\section{Conclusions}
+A* with a simple admissible heuristic (log-base-2 on remaining candidates) is the most practical in this implementation for solving Wordle: it yields the lowest node expansions and modest memory use while reaching solutions quickly. BFS/UCS (with constant cost) are principled but impractical at scale due to memory growth. DFS is memory-efficient but yields longer play sequences. For further improvements, experimenting with information-driven cost functions in UCS and improved heuristics for A* (e.g. entropy-based heuristics computed from feedback partitions) is recommended.
+
+\section{References}
+\begin{itemize}
+\item Wordle repository code files:
+\begin{verbatim}
+wordle/solver_optimized.py, wordle/feedback_table.py, wordle/feedback.py,
+wordle/knowledge.py, run_benchmarks.py, scripts/detailed_benchmark.py
+\end{verbatim}
+\item Russell, S. and Norvig, P. (2016). \emph{Artificial Intelligence: A Modern Approach}. (for standard search algorithm descriptions)
+\end{itemize}
+
+\appendix
+\section{Appendix A: Files and commands}
+\begin{itemize}
+\item Added script: \texttt{scripts/detailed\_benchmark.py} (collects average guesses in addition to the original metrics).
+\item Re-run benchmarks as shown in the "Experiment Methodology" section. Set the environment variable \texttt{PYTHONPATH} to the repository root when invoking the scripts so the package imports resolve.
+\end{itemize}
+
+\section{Appendix B: Notes on measuring memory}
+The repository benchmark harness uses Python's \texttt{tracemalloc} to measure peak memory during solver execution; reported values are in KiB. Note that \texttt{tracemalloc} measures Python memory allocations and does not include all OS-level memory usage, so system-level metrics (e.g., via OS tools) may differ.
+
+\end{document}
